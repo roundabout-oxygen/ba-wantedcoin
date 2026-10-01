@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>指名手配ショップ購入計画アプリ | ブルーアーカイブ</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ba: {
+              blue: '#00A3FF',
+              darkblue: '#0284C7',
+              navy: '#1E293B',
+              sky: '#E0F2FE',
+              accent: '#38BDF8'
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"M PLUS Rounded 1c"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #f0f7ff 0%, #e8f2fc 100%);
+      min-height: 100vh;
+      color: #1e293b;
+    }
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { 
+      -webkit-appearance: none; 
+      margin: 0; 
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+
+    /* デュアルスライダー用スタイル */
+    .dual-range-container {
+      position: relative;
+      height: 20px;
+      display: flex;
+      align-items: center;
+    }
+    .dual-range-track {
+      position: absolute;
+      width: 100%;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+    }
+    .dual-range-highlight {
+      position: absolute;
+      height: 6px;
+      background: #38bdf8;
+      border-radius: 3px;
+    }
+    .dual-range-input {
+      position: absolute;
+      width: 100%;
+      height: 20px;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      pointer-events: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      outline: none;
+    }
+    .dual-range-input::-webkit-slider-runnable-track {
+      background: transparent;
+      border: none;
+    }
+    .dual-range-input::-moz-range-track {
+      background: transparent;
+      border: none;
+    }
+    .thumb-current::-webkit-slider-thumb {
+      pointer-events: auto;
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #f59e0b;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      border: 2px solid #ffffff;
+      transition: transform 0.1s;
+    }
+    .thumb-current::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    .thumb-current::-moz-range-thumb {
+      pointer-events: auto;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #f59e0b;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      border: 2px solid #ffffff;
+    }
+    .thumb-target::-webkit-slider-thumb {
+      pointer-events: auto;
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #0284c7;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      border: 2px solid #ffffff;
+      transition: transform 0.1s;
+    }
+    .thumb-target::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    .thumb-target::-moz-range-thumb {
+      pointer-events: auto;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #0284c7;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      border: 2px solid #ffffff;
+    }
+
+    .sticky-bar {
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-5px); }
+      40%, 80% { transform: translateX(5px); }
+    }
+    .animate-shake {
+      animation: shake 0.4s ease-in-out;
+    }
+  </style>
+</head>
+<body class="font-sans antialiased text-slate-800 pb-16">
+  <div id="app" class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 pt-3">
+
+    <!-- 画面上部 1行要約バー (Sticky Bar) -->
+    <div class="sticky top-2 z-40 mb-3 bg-white/95 sticky-bar border border-sky-200/90 rounded-2xl shadow-sm p-2 px-3 sm:px-4 flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div class="flex items-center space-x-1.5 sm:space-x-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="font-bold text-slate-700 hidden sm:inline">指名手配コイン:</span>
+        <span class="text-slate-500 font-semibold">所持</span>
+        <span class="font-black text-slate-900 text-xs sm:text-sm">{{ formatNumber(currentCoins) }}コイン</span>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div v-for="(m, idx) in monthsSummary" :key="idx" class="flex items-center space-x-1">
+          <span class="font-extrabold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px]"
+            :class="idx === 0 && displayMonthOffset === 0 ? 'bg-sky-100 text-sky-800 font-black' : 'bg-slate-100 text-slate-700'">
+            {{ m.label }}
+          </span>
+          <span :class="m.balance < 0 ? 'text-rose-600 font-black' : 'text-slate-800 font-extrabold'" class="text-[11px] sm:text-xs">
+            {{ formatNumber(m.balance) }}
+          </span>
+          <span v-if="m.balance < 0" class="text-rose-500 font-bold" title="コイン不足">!</span>
+        </div>
+
+        <button v-if="displayMonthOffset !== 0" @click="resetToCurrentMonth"
+          class="text-sky-600 hover:text-sky-800 font-bold text-[10px] underline ml-1">
+          今月へ
+        </button>
+      </div>
+    </div>
+
+    <!-- ヘッダー -->
+    <header class="flex flex-col sm:flex-row items-center justify-between gap-3 mb-3 bg-white/90 backdrop-blur rounded-2xl p-3 px-4 sm:px-5 border border-sky-100 shadow-2xs">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-ba-blue flex items-center justify-center text-white shadow-sm shadow-sky-200 flex-shrink-0">
+          <i class="fa-solid fa-shapes text-base"></i>
+        </div>
+        <div>
+          <h1 class="text-sm sm:text-lg font-black text-slate-800 tracking-tight flex items-center gap-1.5">
+            指名手配ショップ購入計画アプリ
+            <span class="text-[9px] sm:text-[10px] bg-sky-100 text-sky-700 font-bold px-1.5 py-0.5 rounded-full border border-sky-200">2026年10月〜</span>
+          </h1>
+        </div>
+      </div>
+
+      <!-- 右側ボタン群 (表示切替 ＆ JSON保存/読込/リセット) -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <!-- 表示モード切替スイッチ (PC / スマホ) -->
+        <div class="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px] font-bold">
+          <button @click="viewMode = 'auto'" :class="viewMode === 'auto' ? 'bg-white text-sky-700 shadow-2xs' : 'text-slate-500 hover:text-slate-800'" class="px-2 py-0.5 rounded transition">自動</button>
+          <button @click="viewMode = 'pc'" :class="viewMode === 'pc' ? 'bg-white text-sky-700 shadow-2xs' : 'text-slate-500 hover:text-slate-800'" class="px-2 py-0.5 rounded transition flex items-center gap-1"><i class="fa-solid fa-desktop text-[10px]"></i>PC</button>
+          <button @click="viewMode = 'mobile'" :class="viewMode === 'mobile' ? 'bg-white text-sky-700 shadow-2xs' : 'text-slate-500 hover:text-slate-800'" class="px-2 py-0.5 rounded transition flex items-center gap-1"><i class="fa-solid fa-mobile-screen text-[10px]"></i>スマホ</button>
+        </div>
+
+        <button @click="exportData" class="px-2 py-1 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1">
+          <i class="fa-solid fa-download text-sky-600 text-[10px]"></i>保存
+        </button>
+        <label class="px-2 py-1 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer flex items-center gap-1">
+          <i class="fa-solid fa-upload text-sky-600 text-[10px]"></i>読込
+          <input type="file" @change="importData" accept=".json" class="hidden">
+        </label>
+        <button @click="confirmReset" class="px-2 py-1 text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition flex items-center gap-1">
+          <i class="fa-solid fa-rotate-left text-[10px]"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- 【最上部に配置】：指名手配コイン 収支集計 -->
+    <section class="bg-white rounded-2xl shadow-sm border border-sky-200 p-3 sm:p-4 mb-3">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 items-center">
+        
+        <!-- 左カラム：所持コイン数 ＆ マンスリー ＆ 毎月のコイン入手量 -->
+        <div class="lg:col-span-5 bg-slate-50/90 rounded-xl p-3 border border-slate-200 space-y-2">
+          
+          <!-- 上段：現在の所持コイン数 -->
+          <div class="flex items-center justify-between gap-2">
+            <label class="text-xs font-extrabold text-slate-700 whitespace-nowrap">
+              現在の所持コイン数
+            </label>
+            <div class="relative flex items-center flex-1 max-w-[180px]">
+              <input type="text" v-model="formattedCurrentCoins"
+                class="w-full bg-white border-2 border-slate-300 rounded-xl px-2.5 py-1 text-base sm:text-lg font-black text-slate-800 text-right pr-12 focus:border-sky-500 focus:outline-none transition">
+              <span class="absolute right-2.5 text-xs font-bold text-slate-400">コイン</span>
+            </div>
+          </div>
+
+          <!-- 下段：左側に毎月のコイン入手量、右側にマンスリー・ハーフボタン (画像通りの横配置) -->
+          <div class="border-t border-slate-200/80 pt-1.5 flex flex-wrap items-center justify-between gap-2">
+            
+            <!-- 毎月のコイン入手量 (強調表示) -->
+            <div>
+              <div class="text-[10px] font-extrabold text-slate-500 leading-none mb-0.5">
+                毎月のコイン入手量
+              </div>
+              <div class="flex items-baseline gap-0.5 text-slate-700">
+                <span class="text-xs font-semibold text-slate-500">{{ monthlyRateText }}</span>
+                <span class="text-base sm:text-lg font-black text-sky-700 tracking-tight">
+                  {{ monthlyRateValue }}
+                </span>
+                <span class="text-[11px] font-bold text-slate-500">コイン/月</span>
+              </div>
+            </div>
+
+            <!-- マンスリー ＆ マンスリー（ハーフ） -->
+            <div class="flex items-center gap-1.5">
+              <label class="flex items-center space-x-1 text-xs font-bold text-slate-700 cursor-pointer bg-white px-2 py-1 rounded-lg border border-slate-200 hover:border-sky-300 transition shadow-2xs">
+                <input type="checkbox" v-model="hasMonthly" class="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer">
+                <span>マンスリー</span>
+              </label>
+
+              <label class="flex items-center space-x-1 text-xs font-bold text-slate-700 cursor-pointer bg-white px-2 py-1 rounded-lg border border-slate-200 hover:border-sky-300 transition shadow-2xs">
+                <input type="checkbox" v-model="hasMonthlyHalf" class="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer">
+                <span>マンスリー（ハーフ）</span>
+              </label>
+            </div>
+
+          </div>
+
+          <!-- 【要件追加】：必要文字数の全生徒合計 ＆ 購入に必要なコイン数 (画像2準拠) -->
+          <div class="pt-2 border-t border-slate-200/80 flex flex-wrap items-center gap-2">
+            <span class="bg-rose-50 text-rose-600 border border-rose-200 font-black text-xs sm:text-sm px-3 py-1 rounded-full shadow-2xs">
+              要 {{ formatNumber(totalRequiredPieces) }}文字
+            </span>
+            <span class="bg-rose-50 text-rose-600 border border-rose-200 font-black text-xs sm:text-sm px-3 py-1 rounded-full shadow-2xs">
+              要 {{ formatNumber(totalRequiredCoins) }}コイン
+            </span>
+          </div>
+
+        </div>
+
+        <!-- 右カラム：今月・翌月・翌々月の集計カード ＆ ◀ ▶ ナビゲーション -->
+        <div class="lg:col-span-7 flex items-center gap-1 sm:gap-1.5">
+          
+          <!-- ◀ ボタン (要件: 過去データがない場合は反応せずシェイクアニメーション) -->
+          <button @click="prevMonth"
+            :class="[
+              isShakingPrev ? 'animate-shake' : '',
+              !hasPastData ? 'opacity-40 cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-slate-100 hover:bg-sky-100 text-slate-600 hover:text-sky-700 active:scale-95'
+            ]"
+            class="flex-shrink-0 w-6 sm:w-7 h-20 sm:h-24 border border-slate-200 rounded-xl flex items-center justify-center transition shadow-2xs"
+            :title="hasPastData ? '前月を表示 (◀)' : '今月より前の購入データがありません'">
+            <i class="fa-solid fa-caret-left text-sm sm:text-base"></i>
+          </button>
+
+          <!-- 3ヶ月カード -->
+          <div class="flex-1 grid grid-cols-3 gap-1.5 sm:gap-2">
+            <div v-for="(m, idx) in monthsSummary" :key="idx"
+              :class="[
+                'rounded-xl p-2 sm:p-2.5 border transition flex flex-col justify-between relative shadow-2xs',
+                m.balance < 0 ? 'bg-rose-50/90 border-rose-300' : 'bg-sky-50/60 border-sky-200'
+              ]">
+              
+              <!-- ヘッダー -->
+              <div class="border-b pb-0.5 sm:pb-1 mb-1" :class="m.balance < 0 ? 'border-rose-200' : 'border-sky-200'">
+                <div class="flex items-center justify-between">
+                  <span class="text-[9px] font-extrabold px-1 py-0.2 rounded"
+                    :class="idx === 0 && displayMonthOffset === 0 ? 'bg-sky-500 text-white' : 'bg-slate-200 text-slate-700'">
+                    {{ m.label }}
+                  </span>
+                  <span class="text-[8px] sm:text-[9px] text-slate-400 font-semibold">{{ m.days }}日</span>
+                </div>
+                <div class="font-extrabold text-slate-800 text-[11px] sm:text-xs mt-0.5">
+                  {{ m.month }}月
+                </div>
+              </div>
+
+              <!-- 収支内訳 -->
+              <div class="space-y-0.5 text-[9px] sm:text-[10px]">
+                <div class="flex justify-between items-center text-slate-600">
+                  <span class="text-slate-500">入手:</span>
+                  <span class="font-bold text-emerald-600">+{{ formatNumber(m.income) }}</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-600">
+                  <span class="text-slate-500">消費:</span>
+                  <span class="font-bold text-rose-600">-{{ formatNumber(m.expense) }}</span>
+                </div>
+                <div class="flex justify-between items-center pt-0.5 border-t border-slate-200/60 font-semibold">
+                  <span class="text-slate-500">収支:</span>
+                  <span :class="m.net >= 0 ? 'text-slate-700 font-bold' : 'text-rose-600 font-bold'">
+                    {{ m.net >= 0 ? '+' : '' }}{{ formatNumber(m.net) }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 月末残高 ＆ 必要残 (画像2準拠) -->
+              <div class="mt-1 pt-0.5 border-t" :class="m.balance < 0 ? 'border-rose-200 bg-rose-100/50 -mx-2 -mb-2 sm:-mx-2.5 sm:-mb-2.5 p-1 rounded-b-xl' : 'border-sky-200 bg-sky-100/40 -mx-2 -mb-2 sm:-mx-2.5 sm:-mb-2.5 p-1 rounded-b-xl'">
+                <div class="flex justify-between items-baseline">
+                  <span class="text-[8px] sm:text-[9px] font-bold text-slate-600">残高:</span>
+                  <span :class="m.balance < 0 ? 'text-rose-600 font-black text-[11px] sm:text-xs' : 'text-slate-800 font-extrabold text-[11px] sm:text-xs'">
+                    {{ formatNumber(m.balance) }}
+                  </span>
+                </div>
+                <!-- 必要コインの残 (画像2赤枠部分) -->
+                <div class="flex justify-between items-baseline text-rose-600 font-bold text-[8px] sm:text-[9px] mt-0.5 pt-0.5 border-t border-rose-200/60">
+                  <span>必要残：</span>
+                  <span class="font-black text-[10px] sm:text-[11px] text-rose-600">
+                    {{ formatNumber(m.remainingNeededCoins) }}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ▶ ボタン (要件: 過去データがない場合や今月以降は反応せずシェイクアニメーション) -->
+          <button @click="nextMonth"
+            :class="[
+              isShakingNext ? 'animate-shake' : '',
+              !hasPastData || displayMonthOffset >= 0 ? 'opacity-40 cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-slate-100 hover:bg-sky-100 text-slate-600 hover:text-sky-700 active:scale-95'
+            ]"
+            class="flex-shrink-0 w-6 sm:w-7 h-20 sm:h-24 border border-slate-200 rounded-xl flex items-center justify-center transition shadow-2xs"
+            :title="hasPastData && displayMonthOffset < 0 ? '次月を表示 (▶)' : '今月より前の購入データがありません'">
+            <i class="fa-solid fa-caret-right text-sm sm:text-base"></i>
+          </button>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- コントロールバー (並べ替え・検索・未追加フィルター) -->
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-2 sm:p-2.5 mb-3 flex items-center justify-between gap-1.5 sm:gap-2 text-xs">
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        
+        <!-- 1. 並べ替え -->
+        <div class="flex items-center space-x-1 flex-shrink-0">
+          <i class="fa-solid fa-arrow-down-wide-short text-sky-500"></i>
+          <span v-if="!isMobileView" class="font-bold text-slate-600 whitespace-nowrap">並び替え:</span>
+          <select v-model="sortKey" class="bg-slate-50 border border-slate-300 rounded-lg px-1.5 sm:px-2 py-1 font-bold text-slate-700 focus:outline-none cursor-pointer text-xs max-w-[130px] sm:max-w-none">
+            <option value="releaseDate_asc">実装日 (古い順)</option>
+            <option value="releaseDate_desc">実装日 (新しい順)</option>
+            <option value="name_asc">生徒名 (五十音順)</option>
+            <option value="needed_desc">必要文字数 (多い順)</option>
+            <option value="needed_asc">必要文字数 (少ない順)</option>
+            <option value="buyM1_desc">今月購入数 (多い順)</option>
+          </select>
+        </div>
+
+        <!-- 2. 役割フィルター (スマホでは非表示) -->
+        <select v-if="!isMobileView" v-model="filterRole" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-700 focus:outline-none text-xs">
+          <option value="ALL">役割: 全員</option>
+          <option value="STRIKER">STRIKER</option>
+          <option value="SPECIAL">SPECIAL</option>
+        </select>
+
+        <!-- 3. 検索欄 (スマホでは非表示) -->
+        <div v-if="!isMobileView" class="relative min-w-[110px] sm:min-w-[130px]">
+          <input type="text" v-model="searchQuery" placeholder="検索..."
+            class="w-full pl-5 pr-2 py-1 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-xs">
+          <i class="fa-solid fa-magnifying-glass absolute left-1.5 top-1.5 text-slate-400 text-[10px]"></i>
+        </div>
+
+        <!-- 4. 未追加生徒フィルター -->
+        <!-- スマホ表示：目のアイコンボタン (要件: デフォルト非表示が目を閉じている/斜線アイコン、タップで目を開き表示) -->
+        <button v-if="isMobileView" @click="hideUnreleased = !hideUnreleased"
+          :class="hideUnreleased ? 'bg-slate-50 border-slate-300 text-slate-600' : 'bg-sky-50 border-sky-300 text-sky-700'"
+          class="px-2 py-1 rounded-lg border font-bold text-xs transition active:scale-95 flex items-center gap-1 flex-shrink-0"
+          :title="hideUnreleased ? '未追加生徒を表示する' : '未追加生徒を非表示にする'">
+          <i :class="hideUnreleased ? 'fa-solid fa-eye-slash text-slate-500' : 'fa-solid fa-eye text-sky-600'"></i>
+          <span class="text-[10px] font-bold">({{ unreleasedCount }})</span>
+        </button>
+
+        <!-- PC表示：従来のテキスト付きチェックボックス -->
+        <label v-else class="flex items-center space-x-1.5 font-bold text-slate-800 bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded-lg border border-sky-200 cursor-pointer transition text-xs flex-shrink-0">
+          <input type="checkbox" v-model="hideUnreleased" class="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer">
+          <span>未追加非表示</span>
+          <span class="text-[10px] text-slate-500 font-normal">({{ unreleasedCount }})</span>
+        </label>
+
+      </div>
+
+      <!-- 一括設定＆表示件数 (スマホでは20/27名は非表示、1行に収まる設計) -->
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span v-if="!isMobileView" class="text-slate-400 font-medium text-[11px] sm:text-xs">
+          {{ filteredStudents.length }}/{{ students.length }}名
+        </span>
+        <div class="relative group">
+          <button class="px-2 py-1 text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition flex items-center gap-1 whitespace-nowrap">
+            <i class="fa-solid fa-wand-magic-sparkles text-sky-500"></i> 一括設定 <i class="fa-solid fa-chevron-down text-[9px]"></i>
+          </button>
+          <div class="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 hidden group-hover:block z-30 space-y-1 text-xs">
+            <button @click="setAllTarget(4)" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-sky-50 text-slate-700">目標を 固有1 に</button>
+            <button @click="setAllTarget(5)" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-sky-50 text-slate-700">目標を 固有2 に</button>
+            <button @click="setAllTarget(6)" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-sky-50 text-slate-700">目標を 固有3 に</button>
+            <button @click="setAllTarget(7)" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-sky-50 text-slate-700">目標を 固有4 に</button>
+            <hr class="my-1 border-slate-100">
+            <button @click="clearCurrentMonthBuys" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-rose-50 text-rose-600">今月購入をすべて0に</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- ① 【PC向け表示】：高密度表形式UI (isMobileViewがfalseの時) -->
+    <!-- ========================================== -->
+    <div v-if="!isMobileView" class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[760px]">
+        
+        <!-- テーブルヘッダー (所持文字を星上げ列に統合、必要文字・3ヶ月列) -->
+        <thead class="bg-slate-100 text-slate-700 text-xs font-bold border-b border-slate-200">
+          <tr>
+            <th class="py-2 px-1.5 text-center w-8" title="最上段にピン留め">
+              <i class="fa-solid fa-thumbtack text-slate-400"></i>
+            </th>
+            <th class="py-2 px-3 text-center w-36">生徒</th>
+            <th class="py-2 px-3 text-center w-60">星上げ (現在 → 目標)</th>
+            <th class="py-2 px-2 text-center w-20">必要文字</th>
+            <!-- 3ヶ月列 -->
+            <th class="py-2 px-2 text-center w-36 bg-sky-50/80 border-l border-slate-200">
+              <span class="text-sky-800 font-extrabold">{{ displayMonths[0].month }}月購入</span>
+            </th>
+            <th class="py-2 px-2 text-center w-36 border-l border-slate-200">
+              <span class="text-slate-800 font-extrabold">{{ displayMonths[1].month }}月購入</span>
+            </th>
+            <th class="py-2 px-2 text-center w-36 border-l border-slate-200">
+              <span class="text-slate-800 font-extrabold">{{ displayMonths[2].month }}月購入</span>
+            </th>
+          </tr>
+        </thead>
+
+        <!-- テーブルボディ -->
+        <tbody class="divide-y divide-slate-100 text-xs">
+          <tr v-for="student in filteredStudents" :key="student.id"
+            :class="student.isPinned ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-sky-50/40'"
+            class="transition">
+            
+            <!-- 📌 ピン留め -->
+            <td class="py-1 px-1.5 text-center">
+              <button @click="togglePin(student)"
+                class="p-1 rounded hover:bg-white transition active:scale-95"
+                :title="student.isPinned ? 'ピン留めを解除' : '最上段にピン留め'">
+                <i class="fa-solid fa-thumbtack text-xs"
+                  :class="student.isPinned ? 'text-amber-500 rotate-[-45deg] scale-110 drop-shadow-xs' : 'text-slate-200 hover:text-slate-400'"></i>
+              </button>
+            </td>
+
+            <!-- 生徒 (アイコン ＋ 名前) -->
+            <td class="py-1 px-2.5">
+              <div class="flex items-center space-x-2">
+                <div class="relative flex-shrink-0">
+                  <img :src="student.icon" :alt="student.name" @error="onImageError($event, student)"
+                    class="w-8 h-8 rounded-lg object-cover bg-slate-100 border border-slate-200 shadow-2xs">
+                  <span v-if="student.isUnreleased"
+                    class="absolute -top-1 -left-1 text-[7px] font-black bg-amber-500 text-white px-0.5 rounded shadow-xs leading-none">
+                    未
+                  </span>
+                </div>
+                <div class="font-extrabold text-slate-800 text-xs truncate max-w-[105px]" :title="student.name">
+                  {{ student.name }}
+                </div>
+              </div>
+            </td>
+
+            <!-- 星上げ (現在 → 目標) ＆ 所持数 (添付画像準拠: 上段に☆1 + [0]文字 → 固有1、下段にシークバー) -->
+            <td class="py-1 px-3">
+              <!-- 1行目: ☆1 + [ 0 ] 文字 → 固有1 -->
+              <div class="flex items-center justify-between text-xs font-black leading-none mb-1">
+                <div class="flex items-center space-x-1">
+                  <span class="text-amber-500 font-black text-xs inline-block w-11 text-left">
+                    {{ getCompactGradeText(student.currentGrade) }}
+                  </span>
+                  <span class="text-slate-400 text-xs font-bold">+</span>
+                  <input type="number" v-model.number="student.currentPieces" min="0" max="999"
+                    @change="onCurrentPiecesChange(student)"
+                    @input="onStudentEdit(student)"
+                    class="w-12 bg-slate-50 border border-slate-300 rounded px-1 py-0.5 text-right font-black text-xs text-slate-800 focus:bg-white focus:border-sky-500 focus:outline-none">
+                  <span class="text-slate-500 text-[11px] font-bold">文字</span>
+                </div>
+
+                <div class="flex items-center space-x-1">
+                  <span class="text-slate-400 text-xs font-normal">→</span>
+                  <span class="text-blue-600 font-black text-xs inline-block w-11 text-right">
+                    {{ getCompactGradeText(student.targetGrade) }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 2行目: シークバー -->
+              <div class="dual-range-container w-full">
+                <div class="dual-range-track"></div>
+                <div class="dual-range-highlight"
+                  :style="{
+                    left: (student.currentGrade / 7 * 100) + '%',
+                    width: ((student.targetGrade - student.currentGrade) / 7 * 100) + '%'
+                  }"></div>
+                <input type="range" min="0" max="7" step="1"
+                  v-model.number="student.currentGrade"
+                  @input="onCurrentGradeChange(student)"
+                  class="dual-range-input thumb-current"
+                  title="現在の星を変更">
+                <input type="range" min="0" max="7" step="1"
+                  v-model.number="student.targetGrade"
+                  @input="onTargetGradeChange(student)"
+                  class="dual-range-input thumb-target"
+                  title="目標の星を変更">
+              </div>
+            </td>
+
+            <!-- 必要文字数 (未追加または未編集なら'-'、編集済みなら数値または達成済) -->
+            <td class="py-1 px-1.5 text-center whitespace-nowrap"
+              :class="student.isUnreleased ? 'opacity-40 select-none' : ''">
+              <span v-if="student.isUnreleased || !student.isEdited" class="text-slate-400 font-black text-sm">
+                -
+              </span>
+              <span v-else-if="getRawRequiredPieces(student) > 0"
+                class="text-rose-600 font-extrabold text-xs">
+                {{ getRawRequiredPieces(student) }}
+              </span>
+              <span v-else class="text-emerald-600 font-bold text-[10px]">
+                達成済
+              </span>
+            </td>
+
+            <!-- 今月購入 -->
+            <td class="py-1 px-1.5 text-center border-l border-slate-200 transition"
+              :class="student.isUnreleased ? 'bg-slate-100/70 opacity-40 select-none cursor-not-allowed' : 'bg-sky-50/40'">
+              <div class="flex items-center justify-center space-x-1" :class="student.isUnreleased ? 'pointer-events-none' : ''">
+                <button @click="decreaseBuy(student, 0)"
+                  :disabled="student.isUnreleased || getBuyCount(student, 0) <= 0 || isMaxed(student)"
+                  class="w-5 h-5 bg-white hover:bg-sky-100 disabled:opacity-20 border border-slate-300 rounded text-slate-700 font-bold text-[10px] flex items-center justify-center transition active:scale-95 shadow-2xs">
+                  <i class="fa-solid fa-caret-down"></i>
+                </button>
+                <div class="w-6 text-center font-black text-xs text-slate-800">
+                  {{ student.isUnreleased ? '-' : getBuyCount(student, 0) }}
+                </div>
+                <button @click="increaseBuy(student, 0)"
+                  :disabled="student.isUnreleased || getBuyCount(student, 0) >= 80 || isMaxed(student) || !canBuyMoreInMonth(student, 0)"
+                  class="w-5 h-5 bg-white hover:bg-sky-100 disabled:opacity-20 border border-slate-300 rounded text-slate-700 font-bold text-[10px] flex items-center justify-center transition active:scale-95 shadow-2xs">
+                  <i class="fa-solid fa-caret-up"></i>
+                </button>
+                <div class="text-[10px] ml-0.5 w-12 text-left truncate">
+                  <span :class="!student.isUnreleased && student.isEdited && getRemainingAfterMonthIndex(student, 0) <= 0 && getRawRequiredPieces(student) > 0 ? 'text-emerald-600 font-black' : 'text-slate-500 font-semibold'">
+                    {{ getRemainingPiecesDisplay(student, 0) }}
+                  </span>
+                </div>
+              </div>
+            </td>
+
+            <!-- 翌月購入 -->
+            <td class="py-1 px-1.5 text-center border-l border-slate-200 transition"
+              :class="student.isUnreleased ? 'bg-slate-100/70 opacity-40 select-none cursor-not-allowed' : ''">
+              <div class="flex items-center justify-center space-x-1" :class="student.isUnreleased ? 'pointer-events-none' : ''">
+                <button @click="decreaseBuy(student, 1)"
+                  :disabled="student.isUnreleased || getBuyCount(student, 1) <= 0 || isMaxed(student)"
+                  class="w-5 h-5 bg-white hover:bg-slate-100 disabled:opacity-20 border border-slate-300 rounded text-slate-700 font-bold text-[10px] flex items-center justify-center transition active:scale-95 shadow-2xs">
+                  <i class="fa-solid fa-caret-down"></i>
+                </button>
+                <div class="w-6 text-center font-black text-xs text-slate-800">
+                  {{ student.isUnreleased ? '-' : getBuyCount(student, 1) }}
+                </div>
+                <button @click="increaseBuy(student, 1)"
+                  :disabled="student.isUnreleased || getBuyCount(student, 1) >= 80 || isMaxed(student) || !canBuyMoreInMonth(student, 1)"
+                  class="w-5 h-5 bg-white hover:bg-slate-100 disabled:opacity-20 border border-slate-300 rounded text-slate-700 font-bold text-[10px] flex items-center justify-center transition active:scale-95 shadow-2xs">
+                  <i class="fa-solid fa-caret-up"></i>
+                </button>
+                <div class="text-[10px] ml-0.5 w-12 text-left truncate">
+                  <span :class="!student.isUnreleased && student.isEdited && getRemainingAfterMonthIndex(student, 1) <= 0 && getRawRequiredPieces(student) > 0 ? 'text-emerald-600 font-black' : 'text-slate-500 font-semibold'">
+                    {{ getRemainingPiecesDisplay(student, 1) }}
+                  </span>
+                </div>
+              </div>
+            </td>
+
+            <!-- 翌々月購入 -->
+            <td class="py-1 px-1.5 text-center border-l border-slate-200 transition"
+              :class="student.isUnreleased ? 'bg-slate-100/70 opacity-40 select-none cursor-not-allowed' : ''">
+              <div class="flex items-center justify-center space-x-1" :class="student.isUnreleased ? 'pointer-events-none' : ''">
+                <button @click="decreaseBuy(student, 2)"
+                  :disabled="student.isUnreleased || getBuyCount(student, 2) <= 0 || isMaxed(student)"
+                  class="w-5 h-5 bg-white hover:bg-slate-100 disabled:opacity-20 border border-slate-300 rounded text-slate-700 font-bold text-[10px] flex items-center justify-center transition active:scale-95 shadow-2xs">
+                  <i class="fa-solid fa-caret-down"></i>
+                </button>
+                <div class="w-6 text-center font-black text-xs text-slate-800">
+                  {{ student.isUnreleased ? '-' : getBuyCount(student, 2) }}
+                </div>
+                <button @click="increaseBuy(student, 2)"
+                  :disabled="student.isUnreleased || getBuyCount(student, 2) >= 80 || isMaxed(student) || !canBuyMoreInMonth(student, 2)"
+                  class="w-5 h-5 bg-white hover:bg-slate-100 disabled:opacity-20 border border-slate-300 rounded text-slate-700 font-bold text-[10px] flex items-center justify-center transition active:scale-95 shadow-2xs">
+                  <i class="fa-solid fa-caret-up"></i>
+                </button>
+                <div class="text-[10px] ml-0.5 w-12 text-left truncate">
+                  <span :class="!student.isUnreleased && student.isEdited && getRemainingAfterMonthIndex(student, 2) <= 0 && getRawRequiredPieces(student) > 0 ? 'text-emerald-600 font-black' : 'text-slate-500 font-semibold'">
+                    {{ getRemainingPiecesDisplay(student, 2) }}
+                  </span>
+                </div>
+              </div>
+            </td>
+
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- ② 【スマホ向け表示】：モバイル専用カードUI (isMobileViewがtrueの時) -->
+    <!-- ========================================== -->
+    <div v-else class="space-y-1.5">
+      <div v-for="student in filteredStudents" :key="student.id"
+        :class="student.isPinned ? 'bg-amber-50/70 border-amber-300 shadow-xs' : 'bg-white border-slate-200 shadow-2xs'"
+        class="rounded-xl border p-2 transition space-y-1.5">
+        
+        <!-- 上段：📌 ＋ アイコン ＋ [ 固有3 + [ 0 ] 文字 → 固有4 ] ＆ シークバー (画像1準拠) -->
+        <div class="flex items-center gap-2">
+          <!-- 📌 ピン留め -->
+          <button @click="togglePin(student)" class="p-0.5 text-xs active:scale-95 flex-shrink-0" title="ピン留め">
+            <i class="fa-solid fa-thumbtack"
+              :class="student.isPinned ? 'text-amber-500 rotate-[-45deg] scale-110 drop-shadow-xs' : 'text-slate-300 hover:text-slate-400'"></i>
+          </button>
+
+          <!-- アイコン -->
+          <div class="relative flex-shrink-0">
+            <img :src="student.icon" :alt="student.name" @error="onImageError($event, student)"
+              class="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200 shadow-2xs">
+            <span v-if="student.isUnreleased"
+              class="absolute -top-1 -left-1 text-[7px] font-black bg-amber-500 text-white px-0.5 rounded leading-none">
+              未
+            </span>
+          </div>
+
+          <!-- 星上げシークバー ＆ 現在・目標星 ＆ 所持数 (名前・必要数は削除) -->
+          <div class="flex-1 min-w-0">
+            <!-- 1行目: 固有3 + [ 0 ] 文字 → 固有4 -->
+            <div class="flex items-center justify-between text-xs font-black leading-none mb-1">
+              <div class="flex items-center space-x-1">
+                <span class="text-amber-500 font-black text-xs sm:text-sm inline-block w-11 text-left">
+                  {{ getCompactGradeText(student.currentGrade) }}
+                </span>
+                <span class="text-slate-400 text-xs font-bold">+</span>
+                <input type="number" v-model.number="student.currentPieces" min="0" max="999"
+                  @change="onCurrentPiecesChange(student)"
+                  @input="onStudentEdit(student)"
+                  class="w-12 bg-slate-50 border border-slate-300 rounded px-1 py-0.5 text-right font-black text-xs text-slate-800 focus:bg-white focus:border-sky-500 focus:outline-none">
+                <span class="text-slate-500 text-[11px] font-bold">文字</span>
+              </div>
+              
+              <div class="flex items-center space-x-1">
+                <span class="text-slate-400 text-xs font-normal">→</span>
+                <span class="text-blue-600 font-black text-xs sm:text-sm inline-block w-11 text-right">
+                  {{ getCompactGradeText(student.targetGrade) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 2行目: シークバー (1つに統合) -->
+            <div class="dual-range-container w-full">
+              <div class="dual-range-track"></div>
+              <div class="dual-range-highlight"
+                :style="{
+                  left: (student.currentGrade / 7 * 100) + '%',
+                  width: ((student.targetGrade - student.currentGrade) / 7 * 100) + '%'
+                }"></div>
+              <input type="range" min="0" max="7" step="1"
+                v-model.number="student.currentGrade"
+                @input="onCurrentGradeChange(student)"
+                class="dual-range-input thumb-current">
+              <input type="range" min="0" max="7" step="1"
+                v-model.number="student.targetGrade"
+                @input="onTargetGradeChange(student)"
+                class="dual-range-input thumb-target">
+            </div>
+          </div>
+        </div>
+
+        <!-- 下段：3ヶ月分の購入枠 (未追加生徒はグレーアウト＆編集不可) -->
+        <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-100 transition"
+          :class="student.isUnreleased ? 'opacity-40 select-none pointer-events-none cursor-not-allowed' : ''">
+          
+          <div v-for="(m, mIdx) in displayMonths" :key="mIdx"
+            :class="student.isUnreleased ? 'bg-slate-100 border-slate-200' : (mIdx === 0 ? 'bg-sky-50/60 border-sky-200' : 'bg-slate-50/80 border-slate-200')"
+            class="rounded-lg p-1 sm:p-1.5 border flex flex-col justify-between">
+            
+            <!-- ヘッダー: 10月購入 (残200) (要件: 未追加なら(-)、未編集なら(残-)) -->
+            <div class="flex items-center justify-between gap-0.5 mb-1 px-0.5">
+              <span class="text-[10px] sm:text-[11px] font-black leading-tight"
+                :class="student.isUnreleased ? 'text-slate-500' : (mIdx === 0 ? 'text-sky-800' : 'text-slate-700')">
+                {{ m.month }}月購入
+              </span>
+              <span class="text-[9px] sm:text-[10px] font-bold leading-tight"
+                :class="!student.isUnreleased && student.isEdited && getRemainingAfterMonthIndex(student, mIdx) <= 0 && getRawRequiredPieces(student) > 0 ? 'text-emerald-600 font-black' : 'text-slate-500'">
+                {{ getRemainingPiecesDisplay(student, mIdx) }}
+              </span>
+            </div>
+
+            <!-- ステッパー: [▼] 0 [▲] -->
+            <div class="flex items-center justify-center space-x-1">
+              <button @click="decreaseBuy(student, mIdx)"
+                :disabled="student.isUnreleased || getBuyCount(student, mIdx) <= 0 || isMaxed(student)"
+                class="w-6 h-6 bg-white border border-slate-300 rounded text-slate-700 font-bold text-xs disabled:opacity-20 flex items-center justify-center active:scale-95 shadow-2xs">
+                <i class="fa-solid fa-caret-down"></i>
+              </button>
+              <span class="w-6 text-center font-black text-xs text-slate-800">
+                {{ student.isUnreleased ? '-' : getBuyCount(student, mIdx) }}
+              </span>
+              <button @click="increaseBuy(student, mIdx)"
+                :disabled="student.isUnreleased || getBuyCount(student, mIdx) >= 80 || isMaxed(student) || !canBuyMoreInMonth(student, mIdx)"
+                class="w-6 h-6 bg-white border border-slate-300 rounded text-slate-700 font-bold text-xs disabled:opacity-20 flex items-center justify-center active:scale-95 shadow-2xs">
+                <i class="fa-solid fa-caret-up"></i>
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer class="mt-6 text-center text-xs text-slate-400 space-y-1">
+      <p>※ 神名文字5個 = 50コイン（1個あたり10コイン換算）。固有4到達済みの生徒は追加購入できません。</p>
+      <p class="text-[11px] text-slate-400">ブルーアーカイブ（ブルアカ）指名手配ショップ購入計画アプリ</p>
+    </footer>
+
+  </div>
+
+  <!-- 外部データおよびロジック -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
