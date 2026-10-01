@@ -2,7 +2,7 @@ const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 
 createApp({
   setup() {
-    const STORAGE_KEY = 'ba_wanted_shop_plan_v7';
+    const STORAGE_KEY = 'ba_wanted_shop_plan_v8';
 
     // 現在の年月 (システム現在時刻: 2026年10月)
     const currentYear = 2026;
@@ -17,6 +17,32 @@ createApp({
     const hasMonthlyHalf = ref(false);  // マンスリー（ハーフ） (+3枚/日)
     const hideUnreleased = ref(true);   // 未追加生徒を非表示 (初期チェックON)
 
+    // 開始日付 (月・日): 初回起動時はその月の1日 (10/1)
+    const startMonth = ref(currentMonth);
+    const startDay = ref(1);
+
+    // 当月の総日数
+    const daysInCurrentMonth = new Date(currentYear, currentMonth, 0).getDate();
+
+    // 今月の有効日数 (日割り計算: 10月1日なら31日分、10月2日なら30日分)
+    const currentMonthEffectiveDays = computed(() => {
+      if (startMonth.value === currentMonth) {
+        const day = Math.min(daysInCurrentMonth, Math.max(1, startDay.value || 1));
+        return Math.max(1, daysInCurrentMonth - day + 1);
+      }
+      return daysInCurrentMonth;
+    });
+
+    // 一括設定メニュー開閉状態
+    const isBatchMenuOpen = ref(false);
+    const toggleBatchMenu = (e) => {
+      if (e) e.stopPropagation();
+      isBatchMenuOpen.value = !isBatchMenuOpen.value;
+    };
+    const closeBatchMenu = () => {
+      isBatchMenuOpen.value = false;
+    };
+
     // 表示モード: 'auto' (幅に応じて自動), 'pc' (強制PC表示), 'mobile' (強制スマホ表示)
     const viewMode = ref('auto');
     const windowWidth = ref(window.innerWidth);
@@ -27,10 +53,12 @@ createApp({
 
     onMounted(() => {
       window.addEventListener('resize', onResize);
+      document.addEventListener('click', closeBatchMenu);
     });
 
     onUnmounted(() => {
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('click', closeBatchMenu);
     });
 
     const isMobileView = computed(() => {
@@ -76,7 +104,7 @@ createApp({
       return tickets * 10;
     });
 
-    // 30日換算の参考入手量表記
+    // 30日換算の参考入手量表記 (参考値なので日割りに依らず固定)
     const monthlyRateText = computed(() => {
       const daily = dailyCoins.value;
       return `1日${daily}ｘ30日＝`;
@@ -91,14 +119,26 @@ createApp({
       return `${year}-${String(month).padStart(2, '0')}`;
     };
 
-    // オフセット付き年月取得ヘルパー
+    // オフセット付き年月取得ヘルパー (今月の場合は日割り日数を反映)
     const getYmByOffset = (offset) => {
       const d = new Date(currentYear, currentMonth - 1 + offset, 1);
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const isCurrent = (year === currentYear && month === currentMonth);
+      const days = isCurrent ? currentMonthEffectiveDays.value : daysInMonth;
+      const isProrated = isCurrent && (startMonth.value === currentMonth && (startDay.value || 1) > 1);
+      const daysText = isProrated ? `${days}日 (日割)` : `${days}日`;
+
       return {
-        year: d.getFullYear(),
-        month: d.getMonth() + 1,
-        key: toYmKey(d.getFullYear(), d.getMonth() + 1),
-        days: new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+        year,
+        month,
+        key: toYmKey(year, month),
+        days,
+        rawDays: daysInMonth,
+        isCurrent,
+        isProrated,
+        daysText
       };
     };
 
@@ -111,13 +151,61 @@ createApp({
       ];
     });
 
-    // 過去月のデータがあるかどうか
-    const hasPastData = computed(() => {
+    // 過去データがある最古のオフセット (なければ 0)
+    const oldestOffset = computed(() => {
       const currentKey = toYmKey(currentYear, currentMonth);
-      return students.value.some(s => {
-        if (!s.buyPlans) return false;
-        return Object.keys(s.buyPlans).some(k => k < currentKey && (s.buyPlans[k] || 0) > 0);
+      let minOff = 0;
+      students.value.forEach(s => {
+        if (s.buyPlans) {
+          Object.keys(s.buyPlans).forEach(k => {
+            if (k < currentKey && (s.buyPlans[k] || 0) > 0) {
+              const [y, m] = k.split('-').map(Number);
+              const off = (y - currentYear) * 12 + (m - currentMonth);
+              if (off < minOff) minOff = off;
+            }
+          });
+        }
       });
+      return minOff;
+    });
+
+    // 未来データがある最遠のオフセット (なければ 0)
+    const furthestOffset = computed(() => {
+      const currentKey = toYmKey(currentYear, currentMonth);
+      let maxOff = 0;
+      students.value.forEach(s => {
+        if (s.buyPlans) {
+          Object.keys(s.buyPlans).forEach(k => {
+            if (k > currentKey && (s.buyPlans[k] || 0) > 0) {
+              const [y, m] = k.split('-').map(Number);
+              const off = (y - currentYear) * 12 + (m - currentMonth);
+              if (off > maxOff) maxOff = off;
+            }
+          });
+        }
+      });
+      return maxOff;
+    });
+
+    // 過去データの有無
+    const hasPastData = computed(() => oldestOffset.value < 0);
+
+    // 生徒側・テーブル側の進める・戻れる判定
+    const canGoPrev = computed(() => {
+      if (displayMonthOffset.value > 0) return true;
+      return hasPastData.value && displayMonthOffset.value > oldestOffset.value;
+    });
+
+    const maxFutureOffset = computed(() => Math.max(12, furthestOffset.value));
+    const canGoNext = computed(() => {
+      return displayMonthOffset.value < maxFutureOffset.value;
+    });
+
+    // 集計カードの進める・戻れる判定
+    // 要件: 翌々月の後の月のデータが入っている場合には▶がアクティブになり閲覧が可能になる
+    const canGoNextSummary = computed(() => {
+      if (displayMonthOffset.value < 0) return true;
+      return furthestOffset.value > (displayMonthOffset.value + 2);
     });
 
     // シェイクアニメーション用フラグ
@@ -138,49 +226,29 @@ createApp({
       }, 450);
     };
 
-    // 月ナビゲーション
-    // 要件: 今月より前の月のデータがない場合は◀・▶を押しても反応しない (シェイクアニメーション)
+    // 月ナビゲーション (生徒・テーブル・全連動)
     const prevMonth = () => {
-      if (!hasPastData.value) {
+      if (!canGoPrev.value) {
         triggerShakePrev();
         return;
       }
-
-      // 過去データがある最古の月まで遡れる
-      const currentKey = toYmKey(currentYear, currentMonth);
-      let oldestOffset = 0;
-      students.value.forEach(s => {
-        if (s.buyPlans) {
-          Object.keys(s.buyPlans).forEach(k => {
-            if (k < currentKey && (s.buyPlans[k] || 0) > 0) {
-              const [y, m] = k.split('-').map(Number);
-              const off = (y - currentYear) * 12 + (m - currentMonth);
-              if (off < oldestOffset) oldestOffset = off;
-            }
-          });
-        }
-      });
-
-      if (displayMonthOffset.value <= oldestOffset) {
-        triggerShakePrev();
-        return;
-      }
-
       displayMonthOffset.value -= 1;
     };
 
     const nextMonth = () => {
-      if (!hasPastData.value) {
+      if (!canGoNext.value) {
         triggerShakeNext();
         return;
       }
+      displayMonthOffset.value += 1;
+    };
 
-      // 今月 (offset = 0) より先には進めない
-      if (displayMonthOffset.value >= 0) {
+    // 集計カード用の進む操作 (未来データがない場合はシェイク)
+    const nextMonthSummary = () => {
+      if (!canGoNextSummary.value) {
         triggerShakeNext();
         return;
       }
-
       displayMonthOffset.value += 1;
     };
 
@@ -487,11 +555,69 @@ createApp({
       return list;
     });
 
+    // 【要件追加】：一括max購入処理
+    // fromMonthOffset: 0 (今月からmax購入処理), 1 (翌月からmax購入処理)
+    const applyMaxBuy = (fromMonthOffset = 0) => {
+      const currentKey = toYmKey(currentYear, currentMonth);
+
+      students.value.forEach(student => {
+        // 未追加生徒・未編集生徒は除外
+        if (student.isUnreleased || !student.isEdited) return;
+
+        const totalNeeded = getRawRequiredPieces(student);
+        if (totalNeeded <= 0) return;
+
+        if (!student.buyPlans) student.buyPlans = {};
+
+        let remaining = totalNeeded;
+
+        if (fromMonthOffset === 1) {
+          // 翌月からmax購入: 今月(offset=0)の購入数は維持
+          const currentBuy = student.buyPlans[currentKey] || 0;
+          remaining = Math.max(0, totalNeeded - currentBuy);
+
+          // 翌月以降の既存プランを一旦クリア
+          Object.keys(student.buyPlans).forEach(k => {
+            if (k > currentKey) {
+              delete student.buyPlans[k];
+            }
+          });
+        } else {
+          // 今月からmax購入: 今月以降の既存プランを一旦クリア (過去データは維持)
+          Object.keys(student.buyPlans).forEach(k => {
+            if (k >= currentKey) {
+              delete student.buyPlans[k];
+            }
+          });
+        }
+
+        // fromMonthOffset から順に各月に最大80個ずつ割り振る
+        let off = fromMonthOffset;
+        while (remaining > 0 && off < 60) {
+          const ymInfo = getYmByOffset(off);
+          const buy = Math.min(80, remaining);
+          student.buyPlans[ymInfo.key] = buy;
+          remaining -= buy;
+          off++;
+        }
+      });
+
+      closeBatchMenu();
+    };
+
+    const clearAllBuys = () => {
+      students.value.forEach(s => {
+        s.buyPlans = {};
+      });
+      closeBatchMenu();
+    };
+
     const setAllTarget = (gradeIndex) => {
       students.value.forEach(s => {
         s.targetGrade = Math.max(s.currentGrade, gradeIndex);
         s.isEdited = true;
       });
+      closeBatchMenu();
     };
 
     const clearCurrentMonthBuys = () => {
@@ -501,6 +627,7 @@ createApp({
           s.buyPlans[ym0] = 0;
         }
       });
+      closeBatchMenu();
     };
 
     const confirmReset = () => {
@@ -510,6 +637,8 @@ createApp({
         hasMonthly.value = false;
         hasMonthlyHalf.value = false;
         hideUnreleased.value = true;
+        startMonth.value = currentMonth;
+        startDay.value = 1;
         sortKey.value = 'releaseDate_asc';
         filterRole.value = 'ALL';
         filterAttack.value = 'ALL';
@@ -519,6 +648,7 @@ createApp({
 
         students.value = rawMaster.map(initStudent);
       }
+      closeBatchMenu();
     };
 
     const exportData = () => {
@@ -529,6 +659,8 @@ createApp({
         hasMonthly: hasMonthly.value,
         hasMonthlyHalf: hasMonthlyHalf.value,
         hideUnreleased: hideUnreleased.value,
+        startMonth: startMonth.value,
+        startDay: startDay.value,
         students: students.value.map(s => ({
           id: s.id,
           name: s.name,
@@ -561,7 +693,8 @@ createApp({
           if (imported.currentCoins !== undefined) currentCoins.value = imported.currentCoins;
           if (imported.hasMonthly !== undefined) hasMonthly.value = imported.hasMonthly;
           if (imported.hasMonthlyHalf !== undefined) hasMonthlyHalf.value = imported.hasMonthlyHalf;
-          if (imported.hideUnreleased !== undefined) hideUnreleased.value = imported.hideUnreleased;
+          if (imported.startMonth !== undefined) startMonth.value = imported.startMonth;
+          if (imported.startDay !== undefined) startDay.value = imported.startDay;
 
           if (Array.isArray(imported.students)) {
             imported.students.forEach(imp => {
@@ -591,6 +724,8 @@ createApp({
         hasMonthly: hasMonthly.value,
         hasMonthlyHalf: hasMonthlyHalf.value,
         hideUnreleased: hideUnreleased.value,
+        startMonth: startMonth.value,
+        startDay: startDay.value,
         sortKey: sortKey.value,
         filterRole: filterRole.value,
         filterAttack: filterAttack.value,
@@ -629,6 +764,8 @@ createApp({
         if (parsed.hasMonthly !== undefined) hasMonthly.value = parsed.hasMonthly;
         if (parsed.hasMonthlyHalf !== undefined) hasMonthlyHalf.value = parsed.hasMonthlyHalf;
         if (parsed.hideUnreleased !== undefined) hideUnreleased.value = parsed.hideUnreleased;
+        if (parsed.startMonth !== undefined) startMonth.value = parsed.startMonth;
+        if (parsed.startDay !== undefined) startDay.value = parsed.startDay;
         if (parsed.sortKey) sortKey.value = parsed.sortKey;
         if (parsed.filterRole) filterRole.value = parsed.filterRole;
         if (parsed.filterAttack) filterAttack.value = parsed.filterAttack;
@@ -678,7 +815,7 @@ createApp({
     });
 
     watch(
-      [currentCoins, hasMonthly, hasMonthlyHalf, hideUnreleased, sortKey, filterRole, filterAttack, viewMode, students],
+      [currentCoins, hasMonthly, hasMonthlyHalf, hideUnreleased, startMonth, startDay, sortKey, filterRole, filterAttack, viewMode, students],
       () => {
         saveState();
       },
@@ -690,13 +827,19 @@ createApp({
       formattedCurrentCoins,
       hasMonthly,
       hasMonthlyHalf,
+      startMonth,
+      startDay,
       displayMonthOffset,
       displayMonths,
       hasPastData,
       isShakingPrev,
       isShakingNext,
+      canGoPrev,
+      canGoNext,
+      canGoNextSummary,
       prevMonth,
       nextMonth,
+      nextMonthSummary,
       resetToCurrentMonth,
       togglePin,
       viewMode,
@@ -733,6 +876,11 @@ createApp({
       getCompactGradeText,
       formatNumber,
       filteredStudents,
+      isBatchMenuOpen,
+      toggleBatchMenu,
+      closeBatchMenu,
+      applyMaxBuy,
+      clearAllBuys,
       setAllTarget,
       clearCurrentMonthBuys,
       confirmReset,
