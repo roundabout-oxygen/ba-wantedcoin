@@ -238,8 +238,13 @@
             </label>
             <div class="relative flex items-center flex-1 max-w-[180px]">
               <input type="text" v-model="formattedCurrentCoins"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                enterkeyhint="done"
+                @keydown.enter="$event.target.blur()"
+                @focus="$event.target.select()"
                 class="w-full bg-white border-2 border-slate-300 rounded-xl px-2.5 py-1 text-base sm:text-lg font-black text-slate-800 text-right pr-12 focus:border-sky-500 focus:outline-none transition">
-              <span class="absolute right-2.5 text-xs font-bold text-slate-400">コイン</span>
+              <span class="absolute right-2.5 text-xs font-bold text-slate-400 pointer-events-none">コイン</span>
             </div>
           </div>
 
@@ -520,6 +525,11 @@
                   </span>
                   <span class="text-slate-400 text-xs font-bold">+</span>
                   <input type="number" v-model.number="student.currentPieces" min="0" max="999"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    enterkeyhint="done"
+                    @keydown.enter="$event.target.blur()"
+                    @focus="$event.target.select()"
                     @change="onCurrentPiecesChange(student)"
                     @input="onStudentEdit(student)"
                     class="w-12 bg-slate-50 border border-slate-300 rounded px-1 py-0.5 text-right font-black text-xs text-slate-800 focus:bg-white focus:border-sky-500 focus:outline-none">
@@ -686,6 +696,11 @@
                 </span>
                 <span class="text-slate-400 text-xs font-bold">+</span>
                 <input type="number" v-model.number="student.currentPieces" min="0" max="999"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  enterkeyhint="done"
+                  @keydown.enter="$event.target.blur()"
+                  @focus="$event.target.select()"
                   @change="onCurrentPiecesChange(student)"
                   @input="onStudentEdit(student)"
                   class="w-12 bg-slate-50 border border-slate-300 rounded px-1 py-0.5 text-right font-black text-xs text-slate-800 focus:bg-white focus:border-sky-500 focus:outline-none">
