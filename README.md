@@ -5,7 +5,13 @@
 🔗 **Webアプリを開く**  
 👉 **https://roundabout-oxygen.github.io/ba-wantedcoin/**
 
-![アプリ使用イメージ](screenshot.jpg)
+---
+
+### ■ PC版画面
+![PC版画面イメージ](screenshot_pc.png)
+
+### ■ スマホ版画面
+![スマホ版画面イメージ](screenshot_mobile.jpg)
 
 ---
 
