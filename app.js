@@ -303,20 +303,41 @@ createApp({
       return student.currentGrade >= 7;
     };
 
+    // 指定月(targetYm)までの全購入累計文字数を取得 (過去月すべてを含む)
+    const getCumulativeBuyUpToYm = (student, targetYm) => {
+      if (!student.buyPlans) return 0;
+      let sum = 0;
+      Object.keys(student.buyPlans).forEach(k => {
+        if (k <= targetYm) {
+          sum += (student.buyPlans[k] || 0);
+        }
+      });
+      return sum;
+    };
+
+    // 指定月(targetYm)より前(未満)の全購入累計文字数を取得
+    const getCumulativeBuyBeforeYm = (student, targetYm) => {
+      if (!student.buyPlans) return 0;
+      let sum = 0;
+      Object.keys(student.buyPlans).forEach(k => {
+        if (k < targetYm) {
+          sum += (student.buyPlans[k] || 0);
+        }
+      });
+      return sum;
+    };
+
     // 指定月までの購入累計と残り文字数計算 (集計用: 未追加生徒・未編集生徒は0)
+    // 画面の表示オフセットに関わらず、過去の全購入を反映して正確に計算
     const getRemainingAfterMonthIndex = (student, monthIndex) => {
       if (student.isUnreleased) return 0; // 未追加生徒は集計除外
       if (!student.isEdited) return 0;
       const totalNeeded = getRawRequiredPieces(student);
       if (totalNeeded <= 0) return 0;
 
-      let boughtBeforeAndAt = 0;
-      for (let i = 0; i <= monthIndex; i++) {
-        const ym = displayMonths.value[i].key;
-        boughtBeforeAndAt += (student.buyPlans?.[ym] || 0);
-      }
-
-      return Math.max(0, totalNeeded - boughtBeforeAndAt);
+      const targetYm = displayMonths.value[monthIndex].key;
+      const boughtUpToTarget = getCumulativeBuyUpToYm(student, targetYm);
+      return Math.max(0, totalNeeded - boughtUpToTarget);
     };
 
     // 各月の残り文字数表示 (要件: 未追加なら'(-)', 未編集なら'(残-)', 固有4なら'(-)', 達成なら'(済)', その他は'(残XX)')
@@ -327,17 +348,14 @@ createApp({
       const rawNeeded = getRawRequiredPieces(student);
       if (rawNeeded <= 0) return '(-)';
 
-      let boughtBeforeAndAt = 0;
-      for (let i = 0; i <= monthIndex; i++) {
-        const ym = displayMonths.value[i].key;
-        boughtBeforeAndAt += (student.buyPlans?.[ym] || 0);
-      }
-      const rem = Math.max(0, rawNeeded - boughtBeforeAndAt);
+      const targetYm = displayMonths.value[monthIndex].key;
+      const boughtUpToTarget = getCumulativeBuyUpToYm(student, targetYm);
+      const rem = Math.max(0, rawNeeded - boughtUpToTarget);
       if (rem <= 0) return '(済)';
       return `(残${rem})`;
     };
 
-    // 購入可能判定 (未追加生徒は常に購入不可)
+    // 購入可能判定 (過去月の購入も加味して上限判定)
     const canBuyMoreInMonth = (student, monthIndex) => {
       if (student.isUnreleased) return false;
       if (isMaxed(student)) return false;
@@ -345,17 +363,12 @@ createApp({
       const totalNeeded = getRawRequiredPieces(student);
       if (totalNeeded <= 0) return false;
 
-      let boughtBefore = 0;
-      for (let i = 0; i < monthIndex; i++) {
-        const ym = displayMonths.value[i].key;
-        boughtBefore += (student.buyPlans?.[ym] || 0);
-      }
+      const currentYm = displayMonths.value[monthIndex].key;
+      const boughtBefore = getCumulativeBuyBeforeYm(student, currentYm);
       const remBefore = Math.max(0, totalNeeded - boughtBefore);
       if (remBefore <= 0) return false;
 
-      const currentYm = displayMonths.value[monthIndex].key;
       const currentBuy = student.buyPlans?.[currentYm] || 0;
-
       if (currentBuy >= 80) return false;
       if (currentBuy >= remBefore) return false;
 
@@ -428,10 +441,38 @@ createApp({
       return totalRequiredPieces.value * 10;
     });
 
+    // オフセット指定でその月の収支を計算するヘルパー
+    const getMonthNetByOffset = (off) => {
+      const ymInfo = getYmByOffset(off);
+      const ym = ymInfo.key;
+      const income = dailyCoins.value * ymInfo.days;
+      const totalPieces = students.value.reduce((sum, s) => {
+        if (s.isUnreleased) return sum;
+        return sum + (s.buyPlans?.[ym] || 0);
+      }, 0);
+      const expense = totalPieces * 10;
+      return income - expense;
+    };
+
+    // 指定オフセットの月が始まる時点（月初）の残高を計算 (過去月・未来月対応)
+    const getStartingBalanceForOffset = (targetOffset) => {
+      let bal = currentCoins.value || 0;
+      if (targetOffset > 0) {
+        for (let i = 0; i < targetOffset; i++) {
+          bal += getMonthNetByOffset(i);
+        }
+      } else if (targetOffset < 0) {
+        for (let i = 0; i > targetOffset; i--) {
+          bal -= getMonthNetByOffset(i - 1);
+        }
+      }
+      return bal;
+    };
+
     // 3ヶ月収支集計 ＆ 各月の必要コイン残
     const monthsSummary = computed(() => {
       const list = [];
-      let prevBalance = currentCoins.value || 0;
+      let prevBalance = getStartingBalanceForOffset(displayMonthOffset.value);
 
       displayMonths.value.forEach((mInfo, idx) => {
         const ym = mInfo.key;

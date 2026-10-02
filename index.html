@@ -337,7 +337,9 @@
                   </span>
                   <span class="text-[8px] sm:text-[9px] text-slate-400 font-semibold">{{ m.daysText }}</span>
                 </div>
-                <div class="font-extrabold text-slate-800 text-[11px] sm:text-xs mt-0.5">
+                <!-- 翌々月の後の月からは下段を非表示(invisibleで高さ・枠の大きさを保持)にし重複を解消 -->
+                <div class="font-extrabold text-[11px] sm:text-xs mt-0.5"
+                  :class="['今月', '翌月', '翌々月'].includes(m.label) ? 'text-slate-800' : 'invisible select-none'">
                   {{ m.month }}月
                 </div>
               </div>
