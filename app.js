@@ -21,6 +21,19 @@ createApp({
     const startMonth = ref(currentMonth);
     const startDay = ref(1);
 
+    // 選択された月の日数 (1〜12月)
+    const daysInSelectedMonth = computed(() => {
+      const m = startMonth.value || currentMonth;
+      return new Date(currentYear, m, 0).getDate();
+    });
+
+    // startMonthが変更された際、startDayがその月の最大日数を超えていれば自動補正
+    watch(daysInSelectedMonth, (maxDays) => {
+      if ((startDay.value || 1) > maxDays) {
+        startDay.value = maxDays;
+      }
+    });
+
     // 当月の総日数
     const daysInCurrentMonth = new Date(currentYear, currentMonth, 0).getDate();
 
@@ -33,10 +46,9 @@ createApp({
       return daysInCurrentMonth;
     });
 
-    // 一括設定メニュー開閉状態
+    // 一括設定メニュー開閉状態 (Vueバックドロップにより確実に開閉)
     const isBatchMenuOpen = ref(false);
-    const toggleBatchMenu = (e) => {
-      if (e) e.stopPropagation();
+    const toggleBatchMenu = () => {
       isBatchMenuOpen.value = !isBatchMenuOpen.value;
     };
     const closeBatchMenu = () => {
@@ -53,12 +65,10 @@ createApp({
 
     onMounted(() => {
       window.addEventListener('resize', onResize);
-      document.addEventListener('click', closeBatchMenu);
     });
 
     onUnmounted(() => {
       window.removeEventListener('resize', onResize);
-      document.removeEventListener('click', closeBatchMenu);
     });
 
     const isMobileView = computed(() => {
@@ -829,6 +839,7 @@ createApp({
       hasMonthlyHalf,
       startMonth,
       startDay,
+      daysInSelectedMonth,
       displayMonthOffset,
       displayMonths,
       hasPastData,
