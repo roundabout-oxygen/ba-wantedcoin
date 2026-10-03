@@ -596,20 +596,35 @@
           </div>
         </div>
 
-        <!-- 右側：目標達成予定月バッジ -->
-        <div class="flex-shrink-0 flex items-center justify-end">
+        <!-- 右側：目標達成予定月 ＆ 残文字数バッジ (縦幅を広げずにコンパクトに2行配置) -->
+        <div class="flex-shrink-0 flex flex-col items-end justify-center min-w-[62px]">
+          <!-- 達成済 -->
           <span v-if="getAchieveMonthText(student) === '達成済'"
-            class="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-2xs flex items-center gap-1">
-            <i class="fa-solid fa-circle-check text-[11px]"></i>達成済
+            class="px-2 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-2xs flex items-center gap-1">
+            <i class="fa-solid fa-circle-check text-[10px]"></i>達成済
           </span>
-          <span v-else-if="getAchieveMonthText(student).includes('月達成')"
-            class="px-2.5 py-1 rounded-full text-xs font-black bg-sky-100 text-sky-800 border border-sky-300 shadow-2xs">
-            {{ getAchieveMonthText(student) }}
-          </span>
-          <span v-else-if="getAchieveMonthText(student) === '購入計画不足'"
-            class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="目標文字数に対して計画された購入数が不足しています">
-            計画不足
-          </span>
+
+          <!-- 〇月達成 (上段に残〇文字、下段に〇月達成) -->
+          <div v-else-if="getAchieveMonthText(student).includes('月達成')" class="flex flex-col items-end leading-tight">
+            <span class="text-[10px] font-extrabold text-slate-500 mb-0.5">
+              残<span class="text-rose-600 font-black">{{ formatNumber(getRawRequiredPieces(student)) }}</span>文字
+            </span>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-black bg-sky-100 text-sky-800 border border-sky-300 shadow-2xs">
+              {{ getAchieveMonthText(student) }}
+            </span>
+          </div>
+
+          <!-- 購入計画不足 -->
+          <div v-else-if="getAchieveMonthText(student) === '購入計画不足'" class="flex flex-col items-end leading-tight">
+            <span class="text-[10px] font-extrabold text-slate-500 mb-0.5">
+              残<span class="text-rose-600 font-black">{{ formatNumber(getRawRequiredPieces(student)) }}</span>文字
+            </span>
+            <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="目標文字数に対して計画された購入数が不足しています">
+              計画不足
+            </span>
+          </div>
+
+          <!-- その他 (未編集・未追加等) -->
           <span v-else class="text-slate-400 font-bold text-xs px-2">
             -
           </span>
