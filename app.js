@@ -2,11 +2,14 @@ const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 
 createApp({
   setup() {
-    const STORAGE_KEY = 'ba_wanted_shop_plan_v8';
+    const STORAGE_KEY = 'ba_wanted_shop_plan_v9';
 
-    // 現在の年月 (システム現在時刻: 2026年10月)
-    const currentYear = 2026;
-    const currentMonth = 10;
+    // 基準年月 (アプリ内の「今月」設定。初期値: 2026年10月)
+    const baseYear = ref(2026);
+    const baseMonth = ref(10);
+
+    const currentYear = computed(() => baseYear.value);
+    const currentMonth = computed(() => baseMonth.value);
 
     // 表示月のオフセット (0: 今月・翌月・翌々月)
     const displayMonthOffset = ref(0);
@@ -18,13 +21,13 @@ createApp({
     const hideUnreleased = ref(true);   // 未追加生徒を非表示 (初期チェックON)
 
     // 開始日付 (月・日): 初回起動時はその月の1日 (10/1)
-    const startMonth = ref(currentMonth);
+    const startMonth = ref(baseMonth.value);
     const startDay = ref(1);
 
     // 選択された月の日数 (1〜12月)
     const daysInSelectedMonth = computed(() => {
-      const m = startMonth.value || currentMonth;
-      return new Date(currentYear, m, 0).getDate();
+      const m = startMonth.value || baseMonth.value;
+      return new Date(baseYear.value, m, 0).getDate();
     });
 
     // startMonthが変更された際、startDayがその月の最大日数を超えていれば自動補正
@@ -35,15 +38,15 @@ createApp({
     });
 
     // 当月の総日数
-    const daysInCurrentMonth = new Date(currentYear, currentMonth, 0).getDate();
+    const daysInCurrentMonth = computed(() => new Date(baseYear.value, baseMonth.value, 0).getDate());
 
     // 今月の有効日数 (日割り計算: 10月1日なら31日分、10月2日なら30日分)
     const currentMonthEffectiveDays = computed(() => {
-      if (startMonth.value === currentMonth) {
-        const day = Math.min(daysInCurrentMonth, Math.max(1, startDay.value || 1));
-        return Math.max(1, daysInCurrentMonth - day + 1);
+      if (startMonth.value === baseMonth.value) {
+        const day = Math.min(daysInCurrentMonth.value, Math.max(1, startDay.value || 1));
+        return Math.max(1, daysInCurrentMonth.value - day + 1);
       }
-      return daysInCurrentMonth;
+      return daysInCurrentMonth.value;
     });
 
     // 一括設定メニュー開閉状態 (Vueバックドロップにより確実に開閉)
@@ -98,6 +101,7 @@ createApp({
         currentGrade: isHasumiGym ? 7 : 0,    // ハスミ(体操服)は固有4
         currentPieces: 0,
         targetGrade: isHasumiGym ? 7 : 4,     // ハスミ(体操服)は固有4
+        extraPieces: 0,                       // 今月分のみ別途入手文字数 (ドロップ等)
         buyPlans: {},
         isPinned: false,
         isEdited: false                       // 初期状態は未編集
@@ -271,7 +275,7 @@ createApp({
       student.isPinned = !student.isPinned;
     };
 
-    // 純粋な星上げ計算上の必要文字数 (目標 - 現在 - 所持)
+    // 純粋な星上げ計算上の必要文字数 (目標 - 現在 - 所持 - 今月別途入手)
     const getRawRequiredPieces = (student) => {
       if (student.currentGrade >= 7) return 0; // 固有4到達済み
       if (student.targetGrade <= student.currentGrade) return 0;
@@ -279,7 +283,8 @@ createApp({
       const targetCum = gradeDefs[student.targetGrade]?.cumPieces || 0;
       const currentCum = gradeDefs[student.currentGrade]?.cumPieces || 0;
       const neededBase = targetCum - currentCum;
-      return Math.max(0, neededBase - (student.currentPieces || 0));
+      const extra = student.extraPieces || 0;
+      return Math.max(0, neededBase - (student.currentPieces || 0) - extra);
     };
 
     // 集計用必要文字数 (要件: 未追加生徒、および初期状態・未編集の生徒は0として全体集計から除外)
@@ -425,6 +430,38 @@ createApp({
       student.isEdited = true;
       if (student.currentPieces == null || student.currentPieces < 0) {
         student.currentPieces = 0;
+      }
+    };
+
+    // 別途入手文字数変更時 (超過分の未来月購入予定を自動減算して買いすぎ防止)
+    const onExtraPiecesChange = (student) => {
+      student.isEdited = true;
+      if (student.extraPieces == null || student.extraPieces < 0) {
+        student.extraPieces = 0;
+      }
+
+      const targetCum = gradeDefs[student.targetGrade]?.cumPieces || 0;
+      const currentCum = gradeDefs[student.currentGrade]?.cumPieces || 0;
+      const neededBase = Math.max(0, targetCum - currentCum - (student.currentPieces || 0));
+      const maxAllowedBuy = Math.max(0, neededBase - student.extraPieces);
+
+      if (!student.buyPlans) student.buyPlans = {};
+      const currentTotalBuy = Object.values(student.buyPlans).reduce((sum, v) => sum + (v || 0), 0);
+
+      if (currentTotalBuy > maxAllowedBuy) {
+        let toReduce = currentTotalBuy - maxAllowedBuy;
+        const sortedKeys = Object.keys(student.buyPlans)
+          .filter(k => (student.buyPlans[k] || 0) > 0)
+          .sort()
+          .reverse();
+
+        for (const k of sortedKeys) {
+          if (toReduce <= 0) break;
+          const current = student.buyPlans[k] || 0;
+          const deduct = Math.min(current, toReduce);
+          student.buyPlans[k] -= deduct;
+          toReduce -= deduct;
+        }
       }
     };
 
@@ -702,10 +739,173 @@ createApp({
       closeBatchMenu();
     };
 
+    // 端末の現在日時取得ヘルパー
+    const getRealToday = () => {
+      const now = new Date();
+      return {
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+        day: now.getDate()
+      };
+    };
+
+    // 自動ランクアップ（星上げ）計算ヘルパー
+    const calculateRankUp = (currentGrade, currentPieces, addedPieces) => {
+      const currentCum = gradeDefs[currentGrade]?.cumPieces || 0;
+      let totalPieces = currentCum + (currentPieces || 0) + (addedPieces || 0);
+
+      let newGrade = currentGrade;
+      for (let g = 7; g >= 0; g--) {
+        if (totalPieces >= (gradeDefs[g]?.cumPieces || 0)) {
+          newGrade = g;
+          break;
+        }
+      }
+
+      const newGradeCum = gradeDefs[newGrade]?.cumPieces || 0;
+      const newPieces = totalPieces - newGradeCum;
+
+      return {
+        newGrade,
+        newPieces,
+        isRankedUp: newGrade > currentGrade
+      };
+    };
+
+    // 繰越モーダル状態
+    const isRolloverModalOpen = ref(false);
+
+    // 一括設定から「次月へ繰越処理」をクリックした時のハンドラ
+    const openRolloverModal = () => {
+      closeBatchMenu();
+      const real = getRealToday();
+      const monthDiff = (real.year - baseYear.value) * 12 + (real.month - baseMonth.value);
+
+      if (monthDiff >= 2 || monthDiff < 0) {
+        alert(`設定月（${baseYear.value}年${baseMonth.value}月）から2ヶ月以上経過しているか未来の日時となっています。\n日付プルダウンから直接設定月を変更するか、最初から入力し直してください。`);
+        return;
+      }
+
+      isRolloverModalOpen.value = true;
+    };
+
+    const closeRolloverModal = () => {
+      isRolloverModalOpen.value = false;
+    };
+
+    // 繰越プレビューデータ
+    const rolloverPreview = computed(() => {
+      const fromYear = baseYear.value;
+      const fromMonth = baseMonth.value;
+      const toYear = fromMonth === 12 ? fromYear + 1 : fromYear;
+      const toMonth = fromMonth === 12 ? 1 : fromMonth + 1;
+
+      // 繰越後の所持コイン (前月末残高を引き継ぎ、マイナスなら0)
+      const carriedCoins = Math.max(0, monthsSummary.value[0]?.balance || 0);
+
+      const real = getRealToday();
+      const canExecute = (real.year === toYear && real.month === toMonth);
+
+      const currentKey = toYmKey(fromYear, fromMonth);
+
+      const studentPreviews = students.value
+        .filter(s => !s.isUnreleased && s.isEdited)
+        .map(s => {
+          const buyCount = s.buyPlans?.[currentKey] || 0;
+          const extraCount = s.extraPieces || 0;
+          const totalAdded = buyCount + extraCount;
+
+          const rankResult = calculateRankUp(s.currentGrade, s.currentPieces, totalAdded);
+          const wasAchieved = s.currentGrade >= s.targetGrade;
+          const willAchieve = rankResult.newGrade >= s.targetGrade;
+
+          return {
+            id: s.id,
+            name: s.name,
+            icon: s.icon,
+            wikiIcon: s.wikiIcon,
+            currentGradeText: getCompactGradeText(s.currentGrade),
+            currentPieces: s.currentPieces || 0,
+            targetGradeText: getCompactGradeText(s.targetGrade),
+            buyCount,
+            extraCount,
+            totalAdded,
+            newGrade: rankResult.newGrade,
+            newGradeText: getCompactGradeText(rankResult.newGrade),
+            newPieces: rankResult.newPieces,
+            isRankedUp: rankResult.isRankedUp,
+            wasAchieved,
+            willAchieve,
+            hasChange: totalAdded > 0
+          };
+        });
+
+      return {
+        fromYear,
+        fromMonth,
+        toYear,
+        toMonth,
+        carriedCoins,
+        canExecute,
+        realDate: real,
+        studentPreviews
+      };
+    });
+
+    // 繰越処理の確定実行
+    const executeRollover = () => {
+      const prev = rolloverPreview.value;
+      if (!prev.canExecute) {
+        alert(`実際の端末の日時が ${prev.toYear}年${prev.toMonth}月 になるまで確定実行できません。`);
+        return;
+      }
+
+      if (!confirm(`${prev.toYear}年${prev.toMonth}月へ繰越処理を実行します。\n前月末残高(${formatNumber(prev.carriedCoins)}コイン)を引き継ぎ、星上げと購入予定を次月へ進めます。よろしいですか？`)) {
+        return;
+      }
+
+      const fromKey = toYmKey(prev.fromYear, prev.fromMonth);
+
+      // 各生徒の星・文字数更新 ＆ 別途入手数リセット
+      students.value.forEach(s => {
+        if (!s.isUnreleased && s.isEdited) {
+          const buyCount = s.buyPlans?.[fromKey] || 0;
+          const extraCount = s.extraPieces || 0;
+          const totalAdded = buyCount + extraCount;
+
+          const rankResult = calculateRankUp(s.currentGrade, s.currentPieces, totalAdded);
+          s.currentGrade = rankResult.newGrade;
+          s.currentPieces = rankResult.newPieces;
+
+          // 目標を超えたら目標も引き上げ
+          if (s.currentGrade > s.targetGrade) {
+            s.targetGrade = s.currentGrade;
+          }
+
+          s.extraPieces = 0; // 別途入手分リセット
+        }
+      });
+
+      // 所持コイン・年月設定の更新 (buyPlansはキーがYYYY-MMなので新月に連動して自然にスライド)
+      currentCoins.value = prev.carriedCoins;
+      baseYear.value = prev.toYear;
+      baseMonth.value = prev.toMonth;
+      startMonth.value = prev.toMonth;
+      startDay.value = Math.min(new Date(prev.toYear, prev.toMonth, 0).getDate(), prev.realDate.day || 1);
+      displayMonthOffset.value = 0;
+
+      isRolloverModalOpen.value = false;
+      saveState();
+
+      alert(`${prev.toMonth}月への繰越処理が完了しました！\n所持コイン: ${formatNumber(currentCoins.value)}コイン\n星上げと購入予定を更新しました。`);
+    };
+
     const exportData = () => {
       const data = {
-        version: 8,
+        version: 9,
         exportedAt: new Date().toISOString(),
+        baseYear: baseYear.value,
+        baseMonth: baseMonth.value,
         currentCoins: currentCoins.value,
         hasMonthly: hasMonthly.value,
         hasMonthlyHalf: hasMonthlyHalf.value,
@@ -718,6 +918,7 @@ createApp({
           currentGrade: s.currentGrade,
           currentPieces: s.currentPieces,
           targetGrade: s.targetGrade,
+          extraPieces: s.extraPieces || 0,
           buyPlans: s.buyPlans || {},
           isPinned: !!s.isPinned,
           isEdited: !!s.isEdited
@@ -741,6 +942,8 @@ createApp({
       reader.onload = (e) => {
         try {
           const imported = JSON.parse(e.target.result);
+          if (imported.baseYear !== undefined) baseYear.value = imported.baseYear;
+          if (imported.baseMonth !== undefined) baseMonth.value = imported.baseMonth;
           if (imported.currentCoins !== undefined) currentCoins.value = imported.currentCoins;
           if (imported.hasMonthly !== undefined) hasMonthly.value = imported.hasMonthly;
           if (imported.hasMonthlyHalf !== undefined) hasMonthlyHalf.value = imported.hasMonthlyHalf;
@@ -754,6 +957,7 @@ createApp({
                 if (imp.currentGrade !== undefined) target.currentGrade = imp.currentGrade;
                 if (imp.currentPieces !== undefined) target.currentPieces = imp.currentPieces;
                 if (imp.targetGrade !== undefined) target.targetGrade = imp.targetGrade;
+                if (imp.extraPieces !== undefined) target.extraPieces = imp.extraPieces;
                 if (imp.buyPlans) target.buyPlans = imp.buyPlans;
                 if (imp.isPinned !== undefined) target.isPinned = imp.isPinned;
                 if (imp.isEdited !== undefined) target.isEdited = imp.isEdited;
@@ -771,6 +975,8 @@ createApp({
 
     const saveState = () => {
       const payload = {
+        baseYear: baseYear.value,
+        baseMonth: baseMonth.value,
         currentCoins: currentCoins.value,
         hasMonthly: hasMonthly.value,
         hasMonthlyHalf: hasMonthlyHalf.value,
@@ -786,6 +992,7 @@ createApp({
           currentGrade: s.currentGrade,
           currentPieces: s.currentPieces,
           targetGrade: s.targetGrade,
+          extraPieces: s.extraPieces || 0,
           buyPlans: s.buyPlans || {},
           isPinned: !!s.isPinned,
           isEdited: !!s.isEdited
@@ -798,7 +1005,7 @@ createApp({
       try {
         let raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) {
-          raw = localStorage.getItem('ba_wanted_shop_plan_v7') || localStorage.getItem('ba_wanted_shop_plan_v6');
+          raw = localStorage.getItem('ba_wanted_shop_plan_v8') || localStorage.getItem('ba_wanted_shop_plan_v7');
         }
         if (!raw) {
           // 初回ロード時もハスミ(体操服)は固有4
@@ -811,6 +1018,8 @@ createApp({
         }
 
         const parsed = JSON.parse(raw);
+        if (parsed.baseYear !== undefined) baseYear.value = parsed.baseYear;
+        if (parsed.baseMonth !== undefined) baseMonth.value = parsed.baseMonth;
         if (parsed.currentCoins !== undefined) currentCoins.value = parsed.currentCoins;
         if (parsed.hasMonthly !== undefined) hasMonthly.value = parsed.hasMonthly;
         if (parsed.hasMonthlyHalf !== undefined) hasMonthlyHalf.value = parsed.hasMonthlyHalf;
@@ -829,6 +1038,7 @@ createApp({
               if (saved.currentGrade !== undefined) target.currentGrade = saved.currentGrade;
               if (saved.currentPieces !== undefined) target.currentPieces = saved.currentPieces;
               if (saved.targetGrade !== undefined) target.targetGrade = saved.targetGrade;
+              if (saved.extraPieces !== undefined) target.extraPieces = saved.extraPieces;
               if (saved.buyPlans) target.buyPlans = saved.buyPlans;
               if (saved.isPinned !== undefined) target.isPinned = saved.isPinned;
 
@@ -866,7 +1076,7 @@ createApp({
     });
 
     watch(
-      [currentCoins, hasMonthly, hasMonthlyHalf, hideUnreleased, startMonth, startDay, sortKey, filterRole, filterAttack, viewMode, students],
+      [currentCoins, hasMonthly, hasMonthlyHalf, hideUnreleased, baseYear, baseMonth, startMonth, startDay, sortKey, filterRole, filterAttack, viewMode, students],
       () => {
         saveState();
       },
@@ -874,6 +1084,8 @@ createApp({
     );
 
     return {
+      baseYear,
+      baseMonth,
       currentCoins,
       formattedCurrentCoins,
       hasMonthly,
@@ -923,6 +1135,7 @@ createApp({
       onCurrentGradeChange,
       onTargetGradeChange,
       onCurrentPiecesChange,
+      onExtraPiecesChange,
       onStudentEdit,
       onImageError,
       getCompactGradeText,
@@ -936,6 +1149,11 @@ createApp({
       setAllTarget,
       clearCurrentMonthBuys,
       confirmReset,
+      isRolloverModalOpen,
+      openRolloverModal,
+      closeRolloverModal,
+      rolloverPreview,
+      executeRollover,
       exportData,
       importData
     };

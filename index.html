@@ -158,7 +158,7 @@
   </style>
 </head>
 <body class="font-sans antialiased text-slate-800 pb-16">
-  <div id="app" class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 pt-3">
+  <div id="app" class="max-w-[1400px] mx-auto px-2 sm:px-4 lg:px-6 pt-3">
 
     <!-- 画面上部 1行要約バー (Sticky Bar) -->
     <div class="sticky top-2 z-40 mb-3 bg-white/95 sticky-bar border border-sky-200/90 rounded-2xl shadow-sm p-2 px-3 sm:px-4 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -466,7 +466,12 @@
           
           <div v-show="isBatchMenuOpen"
             class="absolute right-0 mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-2xl p-1.5 z-40 space-y-1 text-xs">
-            <!-- 【新設】：max購入処理 (一番最初に追加) -->
+            <!-- 【新設】：次月へ繰越処理 -->
+            <button @click="openRolloverModal" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-emerald-50 text-emerald-800 font-bold flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-calendar-check text-emerald-600"></i> 次月へ繰越処理
+            </button>
+            <hr class="my-1 border-slate-100">
+            <!-- max購入処理 -->
             <button @click="applyMaxBuy(0)" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-sky-50 text-sky-800 font-bold flex items-center gap-1.5 transition">
               <i class="fa-solid fa-bolt text-amber-500"></i> 今月からmax購入処理
             </button>
@@ -502,7 +507,8 @@
             <th class="py-2 px-3 text-center w-60">星上げ (現在 → 目標)</th>
             <th class="py-2 px-2 text-center w-20">必要文字</th>
             <!-- 3ヶ月列 (左右に◀▶ボタン配置、案A準拠) -->
-            <th class="py-2 px-1 text-center w-36 bg-sky-50/80 border-l border-slate-200">
+            <th class="py-2 px-1 text-center border-l border-slate-200 transition"
+              :class="displayMonthOffset === 0 ? 'w-44 bg-sky-50/80' : 'w-36 bg-sky-50/80'">
               <div class="flex items-center justify-center gap-1.5">
                 <button @click="prevMonth"
                   :class="[
@@ -514,7 +520,9 @@
                   :title="canGoPrev ? '前月を表示 (◀)' : 'これ以上前には戻れません'">
                   <i class="fa-solid fa-chevron-left text-xs pointer-events-none"></i>
                 </button>
-                <span class="text-sky-800 font-extrabold whitespace-nowrap">{{ displayMonths[0].month }}月購入</span>
+                <span class="text-sky-800 font-extrabold whitespace-nowrap">
+                  {{ displayMonths[0].month }}月購入<span v-if="displayMonthOffset === 0" class="text-sky-600 font-bold text-[10px] ml-1">+入手</span>
+                </span>
               </div>
             </th>
             <th class="py-2 px-1 text-center w-36 border-l border-slate-200">
@@ -636,9 +644,9 @@
               </span>
             </td>
 
-            <!-- 今月購入 -->
+            <!-- 今月購入 (今月の場合は +入手 入力枠を表示、添付画像再現) -->
             <td class="py-1 px-1.5 text-center border-l border-slate-200 transition"
-              :class="student.isUnreleased ? 'bg-slate-100/70 opacity-40 select-none cursor-not-allowed' : 'bg-sky-50/40'">
+              :class="student.isUnreleased ? 'bg-slate-100/70 opacity-40 select-none cursor-not-allowed' : (displayMonthOffset === 0 ? 'bg-sky-50/40' : '')">
               <div class="flex items-center justify-center space-x-1" :class="student.isUnreleased ? 'pointer-events-none' : ''">
                 <button @click="decreaseBuy(student, 0)"
                   :disabled="student.isUnreleased || getBuyCount(student, 0) <= 0 || isMaxed(student)"
@@ -653,10 +661,23 @@
                   class="w-5 h-5 bg-white hover:bg-sky-100 disabled:opacity-20 border border-slate-300 rounded text-slate-700 font-bold text-[10px] flex items-center justify-center transition active:scale-95 shadow-2xs">
                   <i class="fa-solid fa-caret-up"></i>
                 </button>
-                <div class="text-[10px] ml-0.5 w-12 text-left truncate">
+                <div class="text-[10px] ml-0.5 text-left truncate" :class="displayMonthOffset === 0 ? 'w-10' : 'w-12'">
                   <span :class="!student.isUnreleased && student.isEdited && getRemainingAfterMonthIndex(student, 0) <= 0 && getRawRequiredPieces(student) > 0 ? 'text-emerald-600 font-black' : 'text-slate-500 font-semibold'">
                     {{ getRemainingPiecesDisplay(student, 0) }}
                   </span>
+                </div>
+
+                <!-- 【新設】：今月分のみ別途入手文字数入力枠 (+ [ 0 ]) 添付画像準拠 -->
+                <div v-if="displayMonthOffset === 0" class="flex items-center space-x-0.5 ml-0.5" title="今月別途入手文字数 (ドロップ等)">
+                  <span class="text-slate-400 font-bold text-[10px]">+</span>
+                  <input type="number" v-model.number="student.extraPieces" min="0" max="999"
+                    :disabled="student.isUnreleased || isMaxed(student)"
+                    inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
+                    @keydown.enter="$event.target.blur()"
+                    @focus="$event.target.select()"
+                    @input="onExtraPiecesChange(student)"
+                    placeholder="0"
+                    class="w-10 bg-white border border-slate-300 rounded px-1 py-0.5 text-right font-black text-xs text-sky-800 focus:border-sky-500 focus:outline-none disabled:bg-slate-100 disabled:opacity-40">
                 </div>
               </div>
             </td>
@@ -842,6 +863,19 @@
                 </button>
               </div>
 
+              <!-- 【新設】：今月のみ別途入手 (+入手 [ 0 ]) -->
+              <div v-if="mIdx === 0 && displayMonthOffset === 0" class="flex items-center justify-center gap-1 mt-1 pt-1 border-t border-sky-100">
+                <span class="text-[9px] font-bold text-slate-400">+入手</span>
+                <input type="number" v-model.number="student.extraPieces" min="0" max="999"
+                  :disabled="student.isUnreleased || isMaxed(student)"
+                  inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
+                  @keydown.enter="$event.target.blur()"
+                  @focus="$event.target.select()"
+                  @input="onExtraPiecesChange(student)"
+                  placeholder="0"
+                  class="w-10 bg-white border border-slate-300 rounded px-1 py-0.2 text-right font-black text-[11px] text-sky-800 focus:border-sky-500 focus:outline-none disabled:bg-slate-100 disabled:opacity-40">
+              </div>
+
             </div>
           </div>
 
@@ -857,6 +891,181 @@
             <i class="fa-solid fa-chevron-right pointer-events-none"></i>
           </button>
 
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- ③ 【モーダル】：次月へ繰越処理 (プレビュー ＆ 実行) -->
+    <!-- ========================================== -->
+    <div v-if="isRolloverModalOpen" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4">
+      <!-- オーバーレイ背景 -->
+      <div @click="closeRolloverModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"></div>
+
+      <!-- モーダル本体 -->
+      <div class="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[90vh]">
+        
+        <!-- モーダルヘッダー -->
+        <div class="px-4 py-3 bg-gradient-to-r from-sky-600 to-sky-700 text-white flex items-center justify-between flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-calendar-check text-base text-amber-300"></i>
+            <h3 class="font-bold text-sm sm:text-base">次月へ繰越処理（プレビュー ＆ 実行）</h3>
+          </div>
+          <button @click="closeRolloverModal" class="text-white/80 hover:text-white p-1 rounded-lg transition active:scale-95">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- モーダルコンテンツ（スクロール可能） -->
+        <div class="p-3 sm:p-5 overflow-y-auto space-y-4 text-xs text-slate-700">
+          
+          <!-- 繰越ステータス / 注意メッセージ -->
+          <div v-if="rolloverPreview.canExecute" class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-emerald-800">
+            <i class="fa-solid fa-circle-check text-base text-emerald-600 mt-0.5 flex-shrink-0"></i>
+            <div>
+              <div class="font-bold text-sm">繰越処理を実行できます</div>
+              <p class="text-[11px] text-emerald-700 mt-0.5">
+                端末の日時が {{ rolloverPreview.toYear }}年{{ rolloverPreview.toMonth }}月 になりました。下の「繰越処理を実行する」ボタンを押すと、星上げの反映と購入予定のシフトが行われます。
+              </p>
+            </div>
+          </div>
+          <div v-else class="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800">
+            <i class="fa-solid fa-circle-info text-base text-amber-500 mt-0.5 flex-shrink-0"></i>
+            <div>
+              <div class="font-bold text-sm">現在はプレビュー表示です</div>
+              <p class="text-[11px] text-amber-700 mt-0.5">
+                月跨ぎ前の事前確認ができます。端末の日時が <span class="font-bold underline">{{ rolloverPreview.toYear }}年{{ rolloverPreview.toMonth }}月</span> に達すると「繰越処理を実行する」ボタンが有効化されます。
+              </p>
+            </div>
+          </div>
+
+          <!-- 繰越サマリーカード -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <div class="p-2 bg-white rounded-lg border border-slate-200">
+              <span class="text-[10px] text-slate-400 font-bold block">対象年月</span>
+              <div class="font-black text-xs sm:text-sm text-slate-800 mt-0.5">
+                {{ rolloverPreview.fromMonth }}月 → <span class="text-sky-600">{{ rolloverPreview.toMonth }}月</span>
+              </div>
+            </div>
+            <div class="p-2 bg-white rounded-lg border border-slate-200">
+              <span class="text-[10px] text-slate-400 font-bold block">引き継ぎ所持コイン</span>
+              <div class="font-black text-xs sm:text-sm text-emerald-600 mt-0.5">
+                {{ formatNumber(rolloverPreview.carriedCoins) }} コイン
+              </div>
+            </div>
+            <div class="col-span-2 sm:col-span-1 p-2 bg-white rounded-lg border border-slate-200">
+              <span class="text-[10px] text-slate-400 font-bold block">次月開始日付</span>
+              <div class="font-black text-xs sm:text-sm text-slate-800 mt-0.5">
+                {{ rolloverPreview.toMonth }}月{{ rolloverPreview.realDate.day }}日 開始
+              </div>
+            </div>
+          </div>
+
+          <!-- 生徒の星上げ・文字数プレビュー一覧 -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5 px-0.5">
+              <span class="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                <i class="fa-solid fa-user-graduate text-sky-600"></i> 生徒の星上げ・反映プレビュー
+              </span>
+              <span class="text-[11px] text-slate-500 font-medium">
+                対象: {{ rolloverPreview.studentPreviews.length }}名
+              </span>
+            </div>
+
+            <div class="border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200 sticky top-0">
+                  <tr>
+                    <th class="py-1.5 px-2.5">生徒</th>
+                    <th class="py-1.5 px-2 text-center">今月加算</th>
+                    <th class="py-1.5 px-2.5 text-center">繰越後の星 ＆ 所持数</th>
+                    <th class="py-1.5 px-2 text-center">状態</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr v-for="sp in rolloverPreview.studentPreviews" :key="sp.id"
+                    :class="sp.isRankedUp ? 'bg-amber-50/60' : (sp.hasChange ? 'bg-sky-50/30' : '')"
+                    class="hover:bg-slate-50 transition">
+                    <!-- 生徒情報 -->
+                    <td class="py-1.5 px-2.5">
+                      <div class="flex items-center space-x-1.5">
+                        <img :src="sp.icon" :alt="sp.name" @error="onImageError($event, sp)"
+                          class="w-6 h-6 rounded-md object-cover bg-slate-100 border border-slate-200">
+                        <span class="font-bold text-slate-800 truncate max-w-[90px] sm:max-w-[120px]">{{ sp.name }}</span>
+                      </div>
+                    </td>
+                    <!-- 加算内訳: 購入 + 入手 -->
+                    <td class="py-1.5 px-2 text-center whitespace-nowrap">
+                      <span v-if="sp.totalAdded > 0" class="font-bold text-sky-700">
+                        +{{ sp.totalAdded }}
+                        <span class="text-[9px] text-slate-400 block font-normal">
+                          (購{{ sp.buyCount }}<span v-if="sp.extraCount > 0">+入{{ sp.extraCount }}</span>)
+                        </span>
+                      </span>
+                      <span v-else class="text-slate-300">-</span>
+                    </td>
+                    <!-- 星上げ反映結果 -->
+                    <td class="py-1.5 px-2.5 text-center whitespace-nowrap">
+                      <div class="flex items-center justify-center gap-1">
+                        <span class="text-slate-500 font-semibold">{{ sp.currentGradeText }}+{{ sp.currentPieces }}</span>
+                        <i class="fa-solid fa-arrow-right text-[10px] text-slate-400"></i>
+                        <span :class="sp.isRankedUp ? 'text-amber-600 font-black' : 'text-slate-800 font-bold'">
+                          {{ sp.newGradeText }}+{{ sp.newPieces }}
+                        </span>
+                      </div>
+                    </td>
+                    <!-- ランクアップ/達成バッジ -->
+                    <td class="py-1.5 px-2 text-center whitespace-nowrap">
+                      <span v-if="sp.isRankedUp" class="bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded text-[10px] shadow-2xs">
+                        ★UP!
+                      </span>
+                      <span v-else-if="sp.willAchieve" class="bg-emerald-100 text-emerald-700 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                        達成済
+                      </span>
+                      <span v-else class="text-slate-400 text-[10px]">
+                        -
+                      </span>
+                    </td>
+                  </tr>
+                  <tr v-if="rolloverPreview.studentPreviews.length === 0">
+                    <td colspan="4" class="py-4 text-center text-slate-400">
+                      編集済みの生徒がいません
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 繰越処理の実行内容説明 -->
+          <div class="text-[11px] text-slate-500 space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+            <div class="font-bold text-slate-600 mb-0.5">【繰越処理で更新される項目】</div>
+            <p>・前月末の残高（{{ formatNumber(rolloverPreview.carriedCoins) }}コイン）が新しい「現在の所持コイン数」になります。</p>
+            <p>・今月購入した文字と別途入手文字が星上げ現在値に加算され、必要文字数に達した場合は自動星上げされます。</p>
+            <p>・翌月以降の購入予定はそのまま1ヶ月手前にスライドします。</p>
+            <p>・今月の別途入手枠は0にリセットされます。</p>
+          </div>
+
+        </div>
+
+        <!-- モーダルフッター操作ボタン -->
+        <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 flex-shrink-0">
+          <button @click="closeRolloverModal"
+            class="px-3.5 py-1.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-white active:scale-95 transition font-bold text-xs shadow-2xs">
+            キャンセル
+          </button>
+          <button @click="executeRollover"
+            :disabled="!rolloverPreview.canExecute"
+            :class="[
+              !rolloverPreview.canExecute
+                ? 'opacity-40 cursor-not-allowed bg-slate-300 text-slate-500 border-slate-300 shadow-none'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 shadow-md border-emerald-500'
+            ]"
+            class="px-4 py-1.5 rounded-xl border font-bold text-xs transition flex items-center gap-1.5"
+            :title="!rolloverPreview.canExecute ? '端末の日時が翌月になるまで実行できません' : '繰越処理を実行します'">
+            <i class="fa-solid fa-check"></i> 繰越処理を実行する
+          </button>
         </div>
 
       </div>
