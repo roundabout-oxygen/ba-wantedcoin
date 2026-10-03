@@ -8,6 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue 3 -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Google Fonts -->
@@ -235,7 +237,7 @@
           <div class="flex items-center justify-between gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
             <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
               <!-- 日付プルダウン [ 10月 ▼ / 1日 ▼ ] -->
-              <div class="flex items-center bg-white border border-slate-300 rounded-lg px-2 py-0.5 shadow-2xs font-bold text-xs text-slate-700" title="開始日 (今月のコイン獲得量を日割り計算)">
+              <div v-if="!isReportMode" class="flex items-center bg-white border border-slate-300 rounded-lg px-2 py-0.5 shadow-2xs font-bold text-xs text-slate-700" title="開始日 (今月のコイン獲得量を日割り計算)">
                 <i class="fa-regular fa-calendar text-sky-500 text-xs mr-1.5"></i>
                 <select v-model.number="startMonth" class="bg-transparent font-black text-xs text-slate-800 focus:outline-none cursor-pointer py-0.5">
                   <option v-for="m in 12" :key="m" :value="m">{{ m }}月</option>
@@ -245,12 +247,19 @@
                   <option v-for="d in daysInSelectedMonth" :key="d" :value="d">{{ d }}日</option>
                 </select>
               </div>
+              <!-- 閲覧専用モード時の日付表示 (固定) -->
+              <div v-else class="flex items-center bg-slate-100 border border-slate-200 rounded-lg px-2 py-0.5 font-bold text-xs text-slate-600">
+                <i class="fa-regular fa-calendar text-slate-400 text-xs mr-1.5"></i>
+                <span>{{ startMonth }}月 / {{ startDay }}日</span>
+              </div>
+
               <label class="text-xs font-extrabold text-slate-700 whitespace-nowrap">
                 現在の所持コイン数
               </label>
             </div>
 
-            <div class="relative flex items-center flex-1 max-w-[170px] min-w-[130px]">
+            <!-- 所持コイン入力欄 (閲覧専用モード時は固定表示) -->
+            <div v-if="!isReportMode" class="relative flex items-center flex-1 max-w-[170px] min-w-[130px]">
               <input type="text" v-model="formattedCurrentCoins"
                 inputmode="numeric"
                 pattern="[0-9]*"
@@ -259,6 +268,10 @@
                 @focus="$event.target.select()"
                 class="w-full bg-white border-2 border-slate-300 rounded-xl px-2.5 py-1 text-base sm:text-lg font-black text-slate-800 text-right pr-12 focus:border-sky-500 focus:outline-none transition">
               <span class="absolute right-2.5 text-xs font-bold text-slate-400 pointer-events-none">コイン</span>
+            </div>
+            <div v-else class="flex items-center justify-end flex-1 max-w-[170px] min-w-[130px] bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1 text-slate-800 font-black text-base sm:text-lg">
+              <span>{{ formatNumber(currentCoins) }}</span>
+              <span class="text-xs font-bold text-slate-400 ml-1.5">コイン</span>
             </div>
           </div>
 
@@ -279,119 +292,152 @@
               </div>
             </div>
 
-            <!-- マンスリー ＆ マンスリー（ハーフ） -->
+            <!-- マンスリー ＆ マンスリー（ハーフ） (閲覧モード時は非活性・固定表示) -->
             <div class="flex items-center gap-1.5">
-              <label class="flex items-center space-x-1 text-xs font-bold text-slate-700 cursor-pointer bg-white px-2 py-1 rounded-lg border border-slate-200 hover:border-sky-300 transition shadow-2xs">
-                <input type="checkbox" v-model="hasMonthly" class="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer">
+              <label class="flex items-center space-x-1 text-xs font-bold text-slate-700 bg-white px-2 py-1 rounded-lg border border-slate-200 transition shadow-2xs"
+                :class="isReportMode ? 'opacity-70 cursor-default' : 'cursor-pointer hover:border-sky-300'">
+                <input type="checkbox" v-model="hasMonthly" :disabled="isReportMode" class="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer disabled:cursor-default">
                 <span>マンスリー</span>
               </label>
 
-              <label class="flex items-center space-x-1 text-xs font-bold text-slate-700 cursor-pointer bg-white px-2 py-1 rounded-lg border border-slate-200 hover:border-sky-300 transition shadow-2xs">
-                <input type="checkbox" v-model="hasMonthlyHalf" class="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer">
+              <label class="flex items-center space-x-1 text-xs font-bold text-slate-700 bg-white px-2 py-1 rounded-lg border border-slate-200 transition shadow-2xs"
+                :class="isReportMode ? 'opacity-70 cursor-default' : 'cursor-pointer hover:border-sky-300'">
+                <input type="checkbox" v-model="hasMonthlyHalf" :disabled="isReportMode" class="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer disabled:cursor-default">
                 <span>マンスリー（ハーフ）</span>
               </label>
             </div>
 
           </div>
 
-          <!-- 【要件追加】：必要文字数の全生徒合計 ＆ 購入に必要なコイン数 (画像2準拠) -->
-          <div class="pt-2 border-t border-slate-200/80 flex flex-wrap items-center gap-2">
-            <span class="bg-rose-50 text-rose-600 border border-rose-200 font-black text-xs sm:text-sm px-3 py-1 rounded-full shadow-2xs">
-              要 {{ formatNumber(totalRequiredPieces) }}文字
-            </span>
-            <span class="bg-rose-50 text-rose-600 border border-rose-200 font-black text-xs sm:text-sm px-3 py-1 rounded-full shadow-2xs">
-              要 {{ formatNumber(totalRequiredCoins) }}コイン
-            </span>
+          <!-- 【要件追加】：必要文字数の全生徒合計 ＆ 購入に必要なコイン数 ＆ 右端に「データ」ボタン -->
+          <div class="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="bg-rose-50 text-rose-600 border border-rose-200 font-black text-xs sm:text-sm px-3 py-1 rounded-full shadow-2xs">
+                要 {{ formatNumber(totalRequiredPieces) }}文字
+              </span>
+              <span class="bg-rose-50 text-rose-600 border border-rose-200 font-black text-xs sm:text-sm px-3 py-1 rounded-full shadow-2xs">
+                要 {{ formatNumber(totalRequiredCoins) }}コイン
+              </span>
+            </div>
+
+            <!-- データボタン (閲覧専用モード切替) -->
+            <button @click="toggleReportMode"
+              :class="isReportMode ? 'bg-sky-600 text-white shadow-xs border-sky-500 ring-2 ring-sky-300' : 'bg-white hover:bg-sky-50 text-sky-700 border-sky-300 shadow-2xs'"
+              class="px-3 py-1 rounded-xl border font-black text-xs transition flex items-center gap-1.5 flex-shrink-0 active:scale-95"
+              :title="isReportMode ? '編集モードに戻る' : 'グラフと達成予定月の一覧を表示'">
+              <i class="fa-solid fa-chart-line text-xs"></i>
+              <span>{{ isReportMode ? '編集に戻る' : 'データ' }}</span>
+            </button>
           </div>
 
         </div>
 
-        <!-- 右カラム：今月・翌月・翌々月の集計カード ＆ ◀ ▶ ナビゲーション -->
-        <div class="lg:col-span-7 flex items-center gap-1 sm:gap-1.5">
+        <!-- 右カラム：通常時は3ヶ月集計カード、閲覧モード時は直近6か月の折れ線グラフ -->
+        <div class="lg:col-span-7">
           
-          <!-- ◀ ボタン -->
-          <button @click="prevMonth"
-            :class="[
-              isShakingPrev ? 'animate-shake' : '',
-              !canGoPrev ? 'opacity-35 cursor-not-allowed bg-slate-100 text-slate-300 border-slate-200 shadow-none' : 'bg-sky-600 hover:bg-sky-500 text-white active:scale-95 shadow-sm border-sky-600'
-            ]"
-            class="flex-shrink-0 w-6 sm:w-7 h-20 sm:h-24 border rounded-xl flex items-center justify-center transition"
-            :title="canGoPrev ? '前月を表示 (◀)' : 'これ以上前には戻れません'">
-            <i class="fa-solid fa-caret-left text-sm sm:text-base pointer-events-none"></i>
-          </button>
-
-          <!-- 3ヶ月カード -->
-          <div class="flex-1 grid grid-cols-3 gap-1.5 sm:gap-2">
-            <div v-for="(m, idx) in monthsSummary" :key="idx"
-              :class="[
-                'rounded-xl p-2 sm:p-2.5 border transition flex flex-col justify-between relative shadow-2xs',
-                m.balance < 0 ? 'bg-rose-50/90 border-rose-300' : 'bg-sky-50/60 border-sky-200'
-              ]">
-              
-              <!-- ヘッダー -->
-              <div class="border-b pb-0.5 sm:pb-1 mb-1" :class="m.balance < 0 ? 'border-rose-200' : 'border-sky-200'">
-                <div class="flex items-center justify-between">
-                  <span class="text-[9px] font-extrabold px-1 py-0.2 rounded"
-                    :class="idx === 0 && displayMonthOffset === 0 ? 'bg-sky-500 text-white' : 'bg-slate-200 text-slate-700'">
-                    {{ m.label }}
-                  </span>
-                  <span class="text-[8px] sm:text-[9px] text-slate-400 font-semibold">{{ m.daysText }}</span>
-                </div>
-                <!-- 翌々月の後の月からは下段を非表示(invisibleで高さ・枠の大きさを保持)にし重複を解消 -->
-                <div class="font-extrabold text-[11px] sm:text-xs mt-0.5"
-                  :class="['今月', '翌月', '翌々月'].includes(m.label) ? 'text-slate-800' : 'invisible select-none'">
-                  {{ m.month }}月
-                </div>
-              </div>
-
-              <!-- 収支内訳 -->
-              <div class="space-y-0.5 text-[9px] sm:text-[10px]">
-                <div class="flex justify-between items-center text-slate-600">
-                  <span class="text-slate-500">入手:</span>
-                  <span class="font-bold text-emerald-600">+{{ formatNumber(m.income) }}</span>
-                </div>
-                <div class="flex justify-between items-center text-slate-600">
-                  <span class="text-slate-500">消費:</span>
-                  <span class="font-bold text-rose-600">-{{ formatNumber(m.expense) }}</span>
-                </div>
-                <div class="flex justify-between items-center pt-0.5 border-t border-slate-200/60 font-semibold">
-                  <span class="text-slate-500">収支:</span>
-                  <span :class="m.net >= 0 ? 'text-slate-700 font-bold' : 'text-rose-600 font-bold'">
-                    {{ m.net >= 0 ? '+' : '' }}{{ formatNumber(m.net) }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- 月末残高 ＆ 必要残 (画像2準拠) -->
-              <div class="mt-1 pt-0.5 border-t" :class="m.balance < 0 ? 'border-rose-200 bg-rose-100/50 -mx-2 -mb-2 sm:-mx-2.5 sm:-mb-2.5 p-1 rounded-b-xl' : 'border-sky-200 bg-sky-100/40 -mx-2 -mb-2 sm:-mx-2.5 sm:-mb-2.5 p-1 rounded-b-xl'">
-                <div class="flex justify-between items-baseline">
-                  <span class="text-[8px] sm:text-[9px] font-bold text-slate-600">残高:</span>
-                  <span :class="m.balance < 0 ? 'text-rose-600 font-black text-[11px] sm:text-xs' : 'text-slate-800 font-extrabold text-[11px] sm:text-xs'">
-                    {{ formatNumber(m.balance) }}
-                  </span>
-                </div>
-                <!-- 必要コインの残 (画像2赤枠部分) -->
-                <div class="flex justify-between items-baseline text-rose-600 font-bold text-[8px] sm:text-[9px] mt-0.5 pt-0.5 border-t border-rose-200/60">
-                  <span>必要残：</span>
-                  <span class="font-black text-[10px] sm:text-[11px] text-rose-600">
-                    {{ formatNumber(m.remainingNeededCoins) }}
-                  </span>
-                </div>
-              </div>
-
+          <!-- ① 閲覧専用モード時：直近6か月のコイン残高推移 ＆ 必要コイン残グラフ -->
+          <div v-if="isReportMode" class="bg-white rounded-xl p-2.5 sm:p-3 border border-sky-200 shadow-2xs">
+            <div class="flex items-center justify-between mb-1.5 px-1">
+              <span class="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-chart-area text-sky-600"></i>直近6か月のコイン残高 ＆ 必要残推移
+              </span>
+              <span class="text-[10px] text-slate-400 font-semibold">
+                {{ displayMonths[0].month }}月 〜 {{ displayMonths[0].month + 5 > 12 ? (displayMonths[0].month + 5 - 12) : displayMonths[0].month + 5 }}月
+              </span>
+            </div>
+            <div class="w-full h-36 sm:h-40 relative">
+              <canvas id="trendChartCanvas"></canvas>
             </div>
           </div>
 
-          <!-- ▶ ボタン (要件: 翌々月の後の月のデータが入っている場合には▶がアクティブになり閲覧可能) -->
-          <button @click="nextMonthSummary"
-            :class="[
-              isShakingNext ? 'animate-shake' : '',
-              !canGoNextSummary ? 'opacity-35 cursor-not-allowed bg-slate-100 text-slate-300 border-slate-200 shadow-none' : 'bg-sky-600 hover:bg-sky-500 text-white active:scale-95 shadow-sm border-sky-600'
-            ]"
-            class="flex-shrink-0 w-6 sm:w-7 h-20 sm:h-24 border rounded-xl flex items-center justify-center transition"
-            :title="canGoNextSummary ? '次月を表示 (▶)' : '翌々月より先の購入データがありません'">
-            <i class="fa-solid fa-caret-right text-sm sm:text-base pointer-events-none"></i>
-          </button>
+          <!-- ② 通常編集モード時：今月・翌月・翌々月の集計カード ＆ ◀ ▶ ナビゲーション -->
+          <div v-else class="flex items-center gap-1 sm:gap-1.5">
+            
+            <!-- ◀ ボタン -->
+            <button @click="prevMonth"
+              :class="[
+                isShakingPrev ? 'animate-shake' : '',
+                !canGoPrev ? 'opacity-35 cursor-not-allowed bg-slate-100 text-slate-300 border-slate-200 shadow-none' : 'bg-sky-600 hover:bg-sky-500 text-white active:scale-95 shadow-sm border-sky-600'
+              ]"
+              class="flex-shrink-0 w-6 sm:w-7 h-20 sm:h-24 border rounded-xl flex items-center justify-center transition"
+              :title="canGoPrev ? '前月を表示 (◀)' : 'これ以上前には戻れません'">
+              <i class="fa-solid fa-caret-left text-sm sm:text-base pointer-events-none"></i>
+            </button>
+
+            <!-- 3ヶ月カード -->
+            <div class="flex-1 grid grid-cols-3 gap-1.5 sm:gap-2">
+              <div v-for="(m, idx) in monthsSummary" :key="idx"
+                :class="[
+                  'rounded-xl p-2 sm:p-2.5 border transition flex flex-col justify-between relative shadow-2xs',
+                  m.balance < 0 ? 'bg-rose-50/90 border-rose-300' : 'bg-sky-50/60 border-sky-200'
+                ]">
+                
+                <!-- ヘッダー -->
+                <div class="border-b pb-0.5 sm:pb-1 mb-1" :class="m.balance < 0 ? 'border-rose-200' : 'border-sky-200'">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[9px] font-extrabold px-1 py-0.2 rounded"
+                      :class="idx === 0 && displayMonthOffset === 0 ? 'bg-sky-500 text-white' : 'bg-slate-200 text-slate-700'">
+                      {{ m.label }}
+                    </span>
+                    <span class="text-[8px] sm:text-[9px] text-slate-400 font-semibold">{{ m.daysText }}</span>
+                  </div>
+                  <!-- 翌々月の後の月からは下段を非表示(invisibleで高さ・枠の大きさを保持)にし重複を解消 -->
+                  <div class="font-extrabold text-[11px] sm:text-xs mt-0.5"
+                    :class="['今月', '翌月', '翌々月'].includes(m.label) ? 'text-slate-800' : 'invisible select-none'">
+                    {{ m.month }}月
+                  </div>
+                </div>
+
+                <!-- 収支内訳 -->
+                <div class="space-y-0.5 text-[9px] sm:text-[10px]">
+                  <div class="flex justify-between items-center text-slate-600">
+                    <span class="text-slate-500">入手:</span>
+                    <span class="font-bold text-emerald-600">+{{ formatNumber(m.income) }}</span>
+                  </div>
+                  <div class="flex justify-between items-center text-slate-600">
+                    <span class="text-slate-500">消費:</span>
+                    <span class="font-bold text-rose-600">-{{ formatNumber(m.expense) }}</span>
+                  </div>
+                  <div class="flex justify-between items-center pt-0.5 border-t border-slate-200/60 font-semibold">
+                    <span class="text-slate-500">収支:</span>
+                    <span :class="m.net >= 0 ? 'text-slate-700 font-bold' : 'text-rose-600 font-bold'">
+                      {{ m.net >= 0 ? '+' : '' }}{{ formatNumber(m.net) }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- 月末残高 ＆ 必要残 (画像2準拠) -->
+                <div class="mt-1 pt-0.5 border-t" :class="m.balance < 0 ? 'border-rose-200 bg-rose-100/50 -mx-2 -mb-2 sm:-mx-2.5 sm:-mb-2.5 p-1 rounded-b-xl' : 'border-sky-200 bg-sky-100/40 -mx-2 -mb-2 sm:-mx-2.5 sm:-mb-2.5 p-1 rounded-b-xl'">
+                  <div class="flex justify-between items-baseline">
+                    <span class="text-[8px] sm:text-[9px] font-bold text-slate-600">残高:</span>
+                    <span :class="m.balance < 0 ? 'text-rose-600 font-black text-[11px] sm:text-xs' : 'text-slate-800 font-extrabold text-[11px] sm:text-xs'">
+                      {{ formatNumber(m.balance) }}
+                    </span>
+                  </div>
+                  <!-- 必要コインの残 (画像2赤枠部分) -->
+                  <div class="flex justify-between items-baseline text-rose-600 font-bold text-[8px] sm:text-[9px] mt-0.5 pt-0.5 border-t border-rose-200/60">
+                    <span>必要残：</span>
+                    <span class="font-black text-[10px] sm:text-[11px] text-rose-600">
+                      {{ formatNumber(m.remainingNeededCoins) }}
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- ▶ ボタン (要件: 翌々月の後の月のデータが入っている場合には▶がアクティブになり閲覧可能) -->
+            <button @click="nextMonthSummary"
+              :class="[
+                isShakingNext ? 'animate-shake' : '',
+                !canGoNextSummary ? 'opacity-35 cursor-not-allowed bg-slate-100 text-slate-300 border-slate-200 shadow-none' : 'bg-sky-600 hover:bg-sky-500 text-white active:scale-95 shadow-sm border-sky-600'
+              ]"
+              class="flex-shrink-0 w-6 sm:w-7 h-20 sm:h-24 border rounded-xl flex items-center justify-center transition"
+              :title="canGoNextSummary ? '次月を表示 (▶)' : '翌々月より先の購入データがありません'">
+              <i class="fa-solid fa-caret-right text-sm sm:text-base pointer-events-none"></i>
+            </button>
+
+          </div>
 
         </div>
 
@@ -492,9 +538,71 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- ① 【PC向け表示】：高密度表形式UI (isMobileViewがfalseの時) -->
+    <!-- ⓪ 【閲覧専用モード表示】：PC 2列 / スマホ 1列のシンプル一覧UI (isReportModeがtrueの時) -->
     <!-- ========================================== -->
-    <div v-if="!isMobileView" class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-x-auto">
+    <div v-if="isReportMode" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div v-for="student in filteredStudents" :key="student.id"
+        :class="student.isPinned ? 'bg-amber-50/70 border-amber-300 shadow-xs' : 'bg-white border-slate-200 shadow-2xs'"
+        class="rounded-xl border p-2.5 transition flex items-center justify-between gap-3">
+        
+        <!-- 左側：📌 ＋ アイコン ＋ 生徒名 ＆ 星上げ (現在 → 目標) -->
+        <div class="flex items-center gap-2.5 min-w-0">
+          <!-- 📌 ピン留め -->
+          <button @click="togglePin(student)" class="p-0.5 text-xs active:scale-95 flex-shrink-0" title="ピン留め">
+            <i class="fa-solid fa-thumbtack"
+              :class="student.isPinned ? 'text-amber-500 rotate-[-45deg] scale-110 drop-shadow-xs' : 'text-slate-300 hover:text-slate-400'"></i>
+          </button>
+
+          <!-- アイコン -->
+          <div class="relative flex-shrink-0">
+            <img :src="student.icon" :alt="student.name" @error="onImageError($event, student)"
+              class="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200 shadow-2xs">
+            <span v-if="student.isUnreleased"
+              class="absolute -top-1 -left-1 text-[7px] font-black bg-amber-500 text-white px-0.5 rounded leading-none">
+              未
+            </span>
+          </div>
+
+          <!-- 生徒名 ＆ 星上げテキスト (固定表示) -->
+          <div class="min-w-0">
+            <div class="font-extrabold text-slate-800 text-xs sm:text-sm truncate" :title="student.name">
+              {{ student.name }}
+            </div>
+            <div class="flex items-center gap-1.5 text-xs font-black mt-0.5 whitespace-nowrap">
+              <span class="text-amber-500">{{ getCompactGradeText(student.currentGrade) }}</span>
+              <span class="text-slate-500 font-bold text-[11px]">(+{{ student.currentPieces || 0 }}文字)</span>
+              <span class="text-slate-400 font-normal">→</span>
+              <span class="text-blue-600">{{ getCompactGradeText(student.targetGrade) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右側：目標達成予定月バッジ -->
+        <div class="flex-shrink-0 flex items-center justify-end">
+          <span v-if="getAchieveMonthText(student) === '達成済'"
+            class="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-2xs flex items-center gap-1">
+            <i class="fa-solid fa-circle-check text-[11px]"></i>達成済
+          </span>
+          <span v-else-if="getAchieveMonthText(student).includes('月達成')"
+            class="px-2.5 py-1 rounded-full text-xs font-black bg-sky-100 text-sky-800 border border-sky-300 shadow-2xs flex items-center gap-1">
+            <i class="fa-regular fa-calendar-check text-[11px] text-sky-600"></i>{{ getAchieveMonthText(student) }}
+          </span>
+          <span v-else-if="getAchieveMonthText(student) === '購入計画不足'"
+            class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="目標文字数に対して計画された購入数が不足しています">
+            計画不足
+          </span>
+          <span v-else class="text-slate-400 font-bold text-xs px-2">
+            -
+          </span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- ① 【PC向け表示】：高密度表形式UI (isMobileViewがfalse かつ !isReportModeの時) -->
+    <!-- ========================================== -->
+    <div v-else-if="!isMobileView" class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-x-auto">
       <table class="w-full text-left border-collapse min-w-[760px]">
         
         <!-- テーブルヘッダー (所持文字を星上げ列に統合、必要文字・3ヶ月列) -->

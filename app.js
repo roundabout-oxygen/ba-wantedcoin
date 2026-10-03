@@ -1,4 +1,4 @@
-const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
+const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
 
 createApp({
   setup() {
@@ -572,6 +572,217 @@ createApp({
 
       return list;
     });
+
+    // ==========================================
+    // 閲覧専用モード (データ統計モード) & グラフ描画
+    // ==========================================
+    const isReportMode = ref(false);
+    let trendChartInstance = null;
+
+    // 生徒ごとの目標達成予定月テキスト算出
+    const getAchieveMonthText = (student) => {
+      if (student.isUnreleased) return '-';
+      if (!student.isEdited) return '-';
+      if (student.currentGrade >= 7) return '達成済';
+      const rawNeeded = getRawRequiredPieces(student);
+      if (rawNeeded <= 0) return '達成済';
+
+      // 過去月〜未来月(最大48ヶ月先まで)を走査
+      const startOff = Math.min(0, oldestOffset.value);
+      const endOff = Math.max(24, furthestOffset.value + 6);
+
+      for (let off = startOff; off <= endOff; off++) {
+        const ymInfo = getYmByOffset(off);
+        const boughtUpToTarget = getCumulativeBuyUpToYm(student, ymInfo.key);
+        const rem = Math.max(0, rawNeeded - boughtUpToTarget);
+        if (rem <= 0) {
+          return `${ymInfo.month}月達成`;
+        }
+      }
+      return '購入計画不足';
+    };
+
+    // 直近6か月のコイン残高推移 ＆ 必要コイン残推移データの算出
+    const getSixMonthsData = () => {
+      const labels = [];
+      const balances = [];
+      const remainingNeeded = [];
+
+      let runningBalance = getStartingBalanceForOffset(0);
+
+      for (let off = 0; off < 6; off++) {
+        const ymInfo = getYmByOffset(off);
+        const income = dailyCoins.value * ymInfo.days;
+
+        const totalPieces = students.value.reduce((sum, s) => {
+          if (s.isUnreleased) return sum;
+          return sum + (s.buyPlans?.[ymInfo.key] || 0);
+        }, 0);
+
+        const expense = totalPieces * 10;
+        runningBalance += (income - expense);
+
+        // その月終了時点での全生徒の「必要コインの残」
+        const remainingPieces = students.value.reduce((sum, s) => {
+          if (s.isUnreleased || !s.isEdited) return sum;
+          const needed = getRawRequiredPieces(s);
+          if (needed <= 0) return sum;
+          const bought = getCumulativeBuyUpToYm(s, ymInfo.key);
+          return sum + Math.max(0, needed - bought);
+        }, 0);
+
+        labels.push(`${ymInfo.month}月`);
+        balances.push(runningBalance);
+        remainingNeeded.push(remainingPieces * 10);
+      }
+
+      return { labels, balances, remainingNeeded };
+    };
+
+    // Chart.js の描画・更新
+    const renderTrendChart = () => {
+      const canvas = document.getElementById('trendChartCanvas');
+      if (!canvas || typeof Chart === 'undefined') return;
+
+      if (trendChartInstance) {
+        trendChartInstance.destroy();
+        trendChartInstance = null;
+      }
+
+      const { labels, balances, remainingNeeded } = getSixMonthsData();
+
+      const ctx = canvas.getContext('2d');
+      // 残高用のグラデーション背景
+      const balanceGradient = ctx.createLinearGradient(0, 0, 0, 200);
+      balanceGradient.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
+      balanceGradient.addColorStop(1, 'rgba(56, 189, 248, 0.02)');
+
+      trendChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'コイン残高推移',
+              data: balances,
+              borderColor: '#0284c7',
+              backgroundColor: balanceGradient,
+              borderWidth: 2.5,
+              pointBackgroundColor: '#0284c7',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              fill: true,
+              tension: 0.3,
+              order: 2
+            },
+            {
+              label: '必要コイン残',
+              data: remainingNeeded,
+              borderColor: '#e11d48',
+              backgroundColor: 'transparent',
+              borderWidth: 2.5,
+              borderDash: [5, 4],
+              pointBackgroundColor: '#e11d48',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              fill: false,
+              tension: 0.3,
+              order: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              align: 'end',
+              labels: {
+                boxWidth: 14,
+                boxHeight: 8,
+                usePointStyle: true,
+                pointStyle: 'circle',
+                font: {
+                  size: 11,
+                  weight: 'bold',
+                  family: '"Noto Sans JP", sans-serif'
+                },
+                padding: 10
+              }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.9)',
+              titleFont: { size: 12, weight: 'bold' },
+              bodyFont: { size: 11 },
+              padding: 8,
+              cornerRadius: 8,
+              callbacks: {
+                label: function(context) {
+                  return ` ${context.dataset.label}: ${context.parsed.y.toLocaleString()} コイン`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                font: {
+                  size: 11,
+                  weight: 'bold'
+                },
+                color: '#64748b'
+              }
+            },
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: '#f1f5f9'
+              },
+              ticks: {
+                font: {
+                  size: 10,
+                  weight: '600'
+                },
+                color: '#94a3b8',
+                callback: function(value) {
+                  return value.toLocaleString();
+                }
+              }
+            }
+          }
+        }
+      });
+    };
+
+    const toggleReportMode = () => {
+      isReportMode.value = !isReportMode.value;
+      if (isReportMode.value) {
+        nextTick(() => {
+          renderTrendChart();
+        });
+      }
+    };
+
+    // 閲覧モード中にデータが変更された場合もグラフを自動更新
+    watch([currentCoins, hasMonthly, hasMonthlyHalf, students], () => {
+      if (isReportMode.value) {
+        nextTick(() => {
+          renderTrendChart();
+        });
+      }
+    }, { deep: true });
 
     const unreleasedCount = computed(() => {
       return students.value.filter(s => s.isUnreleased).length;
@@ -1184,7 +1395,10 @@ createApp({
       rolloverPreview,
       executeRollover,
       exportData,
-      importData
+      importData,
+      isReportMode,
+      toggleReportMode,
+      getAchieveMonthText
     };
   }
 }).mount('#app');
