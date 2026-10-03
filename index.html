@@ -648,9 +648,10 @@
             <td class="relative py-1 px-1.5 text-center border-l border-slate-200 transition overflow-hidden"
               :class="student.isUnreleased ? 'bg-slate-100/70 opacity-40 select-none cursor-not-allowed' : (displayMonthOffset === 0 ? 'bg-sky-50/40' : '')">
               
-              <!-- 背景ゲージバー (残り文字数 ÷ 必要文字数) 画像再現の爽やかな黄緑色 -->
-              <div v-if="!student.isUnreleased && student.isEdited && getRawRequiredPieces(student) > 0"
-                class="absolute inset-y-0 left-0 bg-lime-200/50 pointer-events-none transition-all duration-300"
+              <!-- 背景ゲージバー (残りが少なくなるほど満ち、目標到達で100%全塗り) -->
+              <div v-if="!student.isUnreleased && student.isEdited && getGaugePercent(student, 0) > 0"
+                :class="getGaugePercent(student, 0) >= 100 ? 'bg-emerald-100/70' : 'bg-lime-200/50'"
+                class="absolute inset-y-0 left-0 pointer-events-none transition-all duration-300"
                 :style="{ width: getGaugePercent(student, 0) + '%' }"></div>
 
               <div class="relative z-10 flex items-center justify-center space-x-1" :class="student.isUnreleased ? 'pointer-events-none' : ''">
@@ -694,9 +695,10 @@
             <td class="relative py-1 px-1.5 text-center border-l border-slate-200 transition overflow-hidden"
               :class="student.isUnreleased ? 'bg-slate-100/70 opacity-40 select-none cursor-not-allowed' : ''">
               
-              <!-- 背景ゲージバー (残り文字数 ÷ 必要文字数) -->
-              <div v-if="!student.isUnreleased && student.isEdited && getRawRequiredPieces(student) > 0"
-                class="absolute inset-y-0 left-0 bg-lime-200/50 pointer-events-none transition-all duration-300"
+              <!-- 背景ゲージバー (残りが少なくなるほど満ち、目標到達で100%全塗り) -->
+              <div v-if="!student.isUnreleased && student.isEdited && getGaugePercent(student, 1) > 0"
+                :class="getGaugePercent(student, 1) >= 100 ? 'bg-emerald-100/70' : 'bg-lime-200/50'"
+                class="absolute inset-y-0 left-0 pointer-events-none transition-all duration-300"
                 :style="{ width: getGaugePercent(student, 1) + '%' }"></div>
 
               <div class="relative z-10 flex items-center justify-center space-x-1" :class="student.isUnreleased ? 'pointer-events-none' : ''">
@@ -725,9 +727,10 @@
             <td class="relative py-1 px-1.5 text-center border-l border-slate-200 transition overflow-hidden"
               :class="student.isUnreleased ? 'bg-slate-100/70 opacity-40 select-none cursor-not-allowed' : ''">
               
-              <!-- 背景ゲージバー (残り文字数 ÷ 必要文字数) -->
-              <div v-if="!student.isUnreleased && student.isEdited && getRawRequiredPieces(student) > 0"
-                class="absolute inset-y-0 left-0 bg-lime-200/50 pointer-events-none transition-all duration-300"
+              <!-- 背景ゲージバー (残りが少なくなるほど満ち、目標到達で100%全塗り) -->
+              <div v-if="!student.isUnreleased && student.isEdited && getGaugePercent(student, 2) > 0"
+                :class="getGaugePercent(student, 2) >= 100 ? 'bg-emerald-100/70' : 'bg-lime-200/50'"
+                class="absolute inset-y-0 left-0 pointer-events-none transition-all duration-300"
                 :style="{ width: getGaugePercent(student, 2) + '%' }"></div>
 
               <div class="relative z-10 flex items-center justify-center space-x-1" :class="student.isUnreleased ? 'pointer-events-none' : ''">
@@ -854,9 +857,10 @@
               :class="student.isUnreleased ? 'bg-slate-100 border-slate-200' : (mIdx === 0 && displayMonthOffset === 0 ? 'bg-sky-50/60 border-sky-200' : 'bg-slate-50/80 border-slate-200')"
               class="relative rounded-lg p-1.5 border flex flex-col justify-between overflow-hidden">
               
-              <!-- 背景ゲージバー (残り文字数 ÷ 必要文字数) -->
-              <div v-if="!student.isUnreleased && student.isEdited && getRawRequiredPieces(student) > 0"
-                class="absolute inset-y-0 left-0 bg-lime-200/50 pointer-events-none transition-all duration-300"
+              <!-- 背景ゲージバー (残りが少なくなるほど満ち、目標到達で100%全塗り) -->
+              <div v-if="!student.isUnreleased && student.isEdited && getGaugePercent(student, mIdx) > 0"
+                :class="getGaugePercent(student, mIdx) >= 100 ? 'bg-emerald-100/70' : 'bg-lime-200/50'"
+                class="absolute inset-y-0 left-0 pointer-events-none transition-all duration-300"
                 :style="{ width: getGaugePercent(student, mIdx) + '%' }"></div>
 
               <div class="relative z-10 flex flex-col justify-between h-full space-y-1">

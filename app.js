@@ -360,14 +360,21 @@ createApp({
       return `(残${rem})`;
     };
 
-    // 各月終了時点の残り文字数の割合（残り文字数 ÷ 必要文字数、0〜100%）
+    // 各月終了時点の目標達成進捗ゲージ割合（残りが少なくなるほどゲージが満ち、達成で100%満ちる）
     const getGaugePercent = (student, monthIndex) => {
       if (student.isUnreleased || !student.isEdited) return 0;
-      if (isMaxed(student)) return 0;
-      const rawNeeded = getRawRequiredPieces(student);
-      if (rawNeeded <= 0) return 0;
+      if (isMaxed(student)) return 100;
+
+      const targetCum = gradeDefs[student.targetGrade]?.cumPieces || 0;
+      const currentCum = gradeDefs[student.currentGrade]?.cumPieces || 0;
+      const baseNeeded = Math.max(0, targetCum - currentCum - (student.currentPieces || 0));
+      if (baseNeeded <= 0) return 100;
+
       const rem = getRemainingAfterMonthIndex(student, monthIndex);
-      return Math.min(100, Math.max(0, Math.round((rem / rawNeeded) * 100)));
+      if (rem <= 0) return 100;
+
+      const acquired = Math.max(0, baseNeeded - rem);
+      return Math.min(100, Math.max(0, Math.round((acquired / baseNeeded) * 100)));
     };
 
     // 購入可能判定 (過去月の購入も加味して上限判定)
