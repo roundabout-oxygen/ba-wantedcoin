@@ -360,6 +360,16 @@ createApp({
       return `(残${rem})`;
     };
 
+    // 各月終了時点の残り文字数の割合（残り文字数 ÷ 必要文字数、0〜100%）
+    const getGaugePercent = (student, monthIndex) => {
+      if (student.isUnreleased || !student.isEdited) return 0;
+      if (isMaxed(student)) return 0;
+      const rawNeeded = getRawRequiredPieces(student);
+      if (rawNeeded <= 0) return 0;
+      const rem = getRemainingAfterMonthIndex(student, monthIndex);
+      return Math.min(100, Math.max(0, Math.round((rem / rawNeeded) * 100)));
+    };
+
     // 購入可能判定 (過去月の購入も加味して上限判定)
     const canBuyMoreInMonth = (student, monthIndex) => {
       if (student.isUnreleased) return false;
@@ -1137,6 +1147,7 @@ createApp({
       getRequiredPieces,
       getRequiredPiecesDisplay,
       getRemainingPiecesDisplay,
+      getGaugePercent,
       isMaxed,
       getRemainingAfterMonthIndex,
       canBuyMoreInMonth,
