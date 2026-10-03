@@ -812,7 +812,7 @@
           </div>
         </div>
 
-        <!-- 下段：3ヶ月分の購入枠 (左右にスリムな◀▶ボタン配置、添付画像準拠) -->
+        <!-- 下段：2ヶ月分の購入枠 (左右にスリムな◀▶ボタン配置、今月・翌月表示) -->
         <div class="flex items-stretch gap-1 pt-1 border-t border-slate-100 transition"
           :class="student.isUnreleased ? 'opacity-40 select-none pointer-events-none cursor-not-allowed' : ''">
           
@@ -828,52 +828,55 @@
             <i class="fa-solid fa-chevron-left pointer-events-none"></i>
           </button>
 
-          <!-- 3ヶ月分のカード (grid-cols-3) -->
-          <div class="grid grid-cols-3 gap-1 flex-1 min-w-0">
-            <div v-for="(m, mIdx) in displayMonths" :key="mIdx"
+          <!-- 2ヶ月分のカード (grid-cols-2) -->
+          <div class="grid grid-cols-2 gap-1.5 flex-1 min-w-0">
+            <div v-for="(m, mIdx) in displayMonths.slice(0, 2)" :key="mIdx"
               :class="student.isUnreleased ? 'bg-slate-100 border-slate-200' : (mIdx === 0 && displayMonthOffset === 0 ? 'bg-sky-50/60 border-sky-200' : 'bg-slate-50/80 border-slate-200')"
-              class="rounded-lg p-1 sm:p-1.5 border flex flex-col justify-between">
+              class="rounded-lg p-1.5 border flex flex-col justify-between">
               
-              <!-- ヘッダー: 10月購入 (残200) (要件: 未追加なら(-)、未編集なら(残-)) -->
-              <div class="flex items-center justify-between gap-0.5 mb-1 px-0.5">
-                <span class="text-[10px] sm:text-[11px] font-black leading-tight"
+              <!-- ヘッダー: 10月購入 (+入手) (残200) -->
+              <div class="flex items-center justify-between gap-1 mb-1 px-0.5">
+                <span class="text-[11px] font-black leading-tight"
                   :class="student.isUnreleased ? 'text-slate-500' : (mIdx === 0 && displayMonthOffset === 0 ? 'text-sky-800' : 'text-slate-700')">
-                  {{ m.month }}月購入
+                  {{ m.month }}月購入<span v-if="mIdx === 0 && displayMonthOffset === 0" class="text-sky-600 font-bold text-[9px] ml-0.5">+入手</span>
                 </span>
-                <span class="text-[9px] sm:text-[10px] font-bold leading-tight"
+                <span class="text-[10px] font-bold leading-tight"
                   :class="!student.isUnreleased && student.isEdited && getRemainingAfterMonthIndex(student, mIdx) <= 0 && getRawRequiredPieces(student) > 0 ? 'text-emerald-600 font-black' : 'text-slate-500'">
                   {{ getRemainingPiecesDisplay(student, mIdx) }}
                 </span>
               </div>
 
-              <!-- ステッパー: [▼] 0 [▲] -->
-              <div class="flex items-center justify-center space-x-1">
-                <button @click="decreaseBuy(student, mIdx)"
-                  :disabled="student.isUnreleased || getBuyCount(student, mIdx) <= 0 || isMaxed(student)"
-                  class="w-6 h-6 bg-white border border-slate-300 rounded text-slate-700 font-bold text-xs disabled:opacity-20 flex items-center justify-center active:scale-95 shadow-2xs">
-                  <i class="fa-solid fa-caret-down"></i>
-                </button>
-                <span class="w-6 text-center font-black text-xs text-slate-800">
-                  {{ student.isUnreleased ? '-' : getBuyCount(student, mIdx) }}
-                </span>
-                <button @click="increaseBuy(student, mIdx)"
-                  :disabled="student.isUnreleased || getBuyCount(student, mIdx) >= 80 || isMaxed(student) || !canBuyMoreInMonth(student, mIdx)"
-                  class="w-6 h-6 bg-white border border-slate-300 rounded text-slate-700 font-bold text-xs disabled:opacity-20 flex items-center justify-center active:scale-95 shadow-2xs">
-                  <i class="fa-solid fa-caret-up"></i>
-                </button>
-              </div>
+              <!-- 操作行: ステッパー [▼] 0 [▲] ＆ (+ [ 0 ]) を1行で横並び配置 (行を増やさない) -->
+              <div class="flex items-center justify-center gap-1.5">
+                <!-- ステッパー: [▼] 0 [▲] -->
+                <div class="flex items-center space-x-1">
+                  <button @click="decreaseBuy(student, mIdx)"
+                    :disabled="student.isUnreleased || getBuyCount(student, mIdx) <= 0 || isMaxed(student)"
+                    class="w-6 h-6 bg-white border border-slate-300 rounded text-slate-700 font-bold text-xs disabled:opacity-20 flex items-center justify-center active:scale-95 shadow-2xs">
+                    <i class="fa-solid fa-caret-down"></i>
+                  </button>
+                  <span class="w-6 text-center font-black text-xs text-slate-800">
+                    {{ student.isUnreleased ? '-' : getBuyCount(student, mIdx) }}
+                  </span>
+                  <button @click="increaseBuy(student, mIdx)"
+                    :disabled="student.isUnreleased || getBuyCount(student, mIdx) >= 80 || isMaxed(student) || !canBuyMoreInMonth(student, mIdx)"
+                    class="w-6 h-6 bg-white border border-slate-300 rounded text-slate-700 font-bold text-xs disabled:opacity-20 flex items-center justify-center active:scale-95 shadow-2xs">
+                    <i class="fa-solid fa-caret-up"></i>
+                  </button>
+                </div>
 
-              <!-- 【新設】：今月のみ別途入手 (+入手 [ 0 ]) -->
-              <div v-if="mIdx === 0 && displayMonthOffset === 0" class="flex items-center justify-center gap-1 mt-1 pt-1 border-t border-sky-100">
-                <span class="text-[9px] font-bold text-slate-400">+入手</span>
-                <input type="number" v-model.number="student.extraPieces" min="0" max="999"
-                  :disabled="student.isUnreleased || isMaxed(student)"
-                  inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
-                  @keydown.enter="$event.target.blur()"
-                  @focus="$event.target.select()"
-                  @input="onExtraPiecesChange(student)"
-                  placeholder="0"
-                  class="w-10 bg-white border border-slate-300 rounded px-1 py-0.2 text-right font-black text-[11px] text-sky-800 focus:border-sky-500 focus:outline-none disabled:bg-slate-100 disabled:opacity-40">
+                <!-- 今月のみ：横並びで + [ 0 ] (行を増やさず横スペースを活用) -->
+                <div v-if="mIdx === 0 && displayMonthOffset === 0" class="flex items-center space-x-0.5 ml-0.5" title="別途入手文字数 (ドロップ等)">
+                  <span class="text-[10px] font-bold text-slate-400">+</span>
+                  <input type="number" v-model.number="student.extraPieces" min="0" max="999"
+                    :disabled="student.isUnreleased || isMaxed(student)"
+                    inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
+                    @keydown.enter="$event.target.blur()"
+                    @focus="$event.target.select()"
+                    @input="onExtraPiecesChange(student)"
+                    placeholder="0"
+                    class="w-10 bg-white border border-slate-300 rounded px-1 py-0.5 text-right font-black text-xs text-sky-800 focus:border-sky-500 focus:outline-none disabled:bg-slate-100 disabled:opacity-40">
+                </div>
               </div>
 
             </div>
