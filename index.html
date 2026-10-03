@@ -554,12 +554,13 @@
 
         <!-- 中央：生徒名 ＆ 星上げ (現在 → 目標 ＆ シークバー) -->
         <div class="flex-1 min-w-0 px-1">
+          <!-- 1行目: 現在 + [ 0 ] 文字 → 目標 (PCでは生徒名も表示) -->
           <div class="flex items-center justify-between text-xs font-black leading-none mb-1">
-            <div class="font-extrabold text-slate-800 text-xs sm:text-sm truncate max-w-[110px] sm:max-w-[130px] mr-1.5" :title="student.name">
+            <div class="hidden sm:block font-extrabold text-slate-800 text-xs sm:text-sm truncate max-w-[110px] sm:max-w-[130px] mr-1.5" :title="student.name">
               {{ student.name }}
             </div>
-            <div class="flex items-center space-x-1 flex-shrink-0">
-              <span class="text-amber-500 font-black text-xs inline-block w-10 text-left">
+            <div class="flex items-center space-x-1">
+              <span class="text-amber-500 font-black text-xs sm:text-sm inline-block w-10 sm:w-11 text-left">
                 {{ getCompactGradeText(student.currentGrade) }}
               </span>
               <span class="text-slate-400 text-xs font-bold">+</span>
@@ -567,8 +568,10 @@
                 {{ student.currentPieces || 0 }}
               </span>
               <span class="text-slate-500 text-[11px] font-bold">文字</span>
-              <span class="text-slate-400 text-xs font-normal mx-0.5">→</span>
-              <span class="text-blue-600 font-black text-xs inline-block w-10 text-right">
+            </div>
+            <div class="flex items-center space-x-1">
+              <span class="text-slate-400 text-xs font-normal">→</span>
+              <span class="text-blue-600 font-black text-xs sm:text-sm inline-block w-10 sm:w-11 text-right">
                 {{ getCompactGradeText(student.targetGrade) }}
               </span>
             </div>
