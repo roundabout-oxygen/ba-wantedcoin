@@ -360,21 +360,21 @@ createApp({
       return `(残${rem})`;
     };
 
-    // 各月終了時点の目標達成進捗ゲージ割合（残りが少なくなるほどゲージが満ち、達成で100%満ちる）
+    // 各月終了時点の目標達成進捗ゲージ割合（目標とする固有・星に必要な文字数（☆1からの累計）を分母として計算）
     const getGaugePercent = (student, monthIndex) => {
       if (student.isUnreleased || !student.isEdited) return 0;
       if (isMaxed(student)) return 100;
 
+      // 分母: 目標の星に必要な☆1からの累計文字数 (例: 固有1なら330、固有4なら830)
       const targetCum = gradeDefs[student.targetGrade]?.cumPieces || 0;
-      const currentCum = gradeDefs[student.currentGrade]?.cumPieces || 0;
-      const baseNeeded = Math.max(0, targetCum - currentCum - (student.currentPieces || 0));
-      if (baseNeeded <= 0) return 100;
+      if (targetCum <= 0) return 100;
 
       const rem = getRemainingAfterMonthIndex(student, monthIndex);
       if (rem <= 0) return 100;
 
-      const acquired = Math.max(0, baseNeeded - rem);
-      return Math.min(100, Math.max(0, Math.round((acquired / baseNeeded) * 100)));
+      // 分子: その月終了時点での☆1からの累計文字数 (目標累計 - 残り必要数)
+      const currentCumTotal = Math.max(0, targetCum - rem);
+      return Math.min(100, Math.max(0, Math.round((currentCumTotal / targetCum) * 100)));
     };
 
     // 購入可能判定 (過去月の購入も加味して上限判定)
