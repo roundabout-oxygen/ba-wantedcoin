@@ -641,137 +641,141 @@ createApp({
 
     // Chart.js の描画・更新
     const renderTrendChart = () => {
-      const canvas = document.getElementById('trendChartCanvas');
-      if (!canvas || typeof Chart === 'undefined') return;
+      try {
+        const canvas = document.getElementById('trendChartCanvas');
+        if (!canvas || typeof Chart === 'undefined') return;
 
-      if (trendChartInstance) {
-        trendChartInstance.destroy();
-        trendChartInstance = null;
-      }
+        if (trendChartInstance) {
+          trendChartInstance.destroy();
+          trendChartInstance = null;
+        }
 
-      const { labels, balances, remainingNeeded } = getSixMonthsData();
+        const { labels, balances, remainingNeeded } = getSixMonthsData();
 
-      const ctx = canvas.getContext('2d');
-      // 残高用のグラデーション背景
-      const balanceGradient = ctx.createLinearGradient(0, 0, 0, 200);
-      balanceGradient.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
-      balanceGradient.addColorStop(1, 'rgba(56, 189, 248, 0.02)');
+        const ctx = canvas.getContext('2d');
+        // 残高用のグラデーション背景
+        const balanceGradient = ctx.createLinearGradient(0, 0, 0, 200);
+        balanceGradient.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
+        balanceGradient.addColorStop(1, 'rgba(56, 189, 248, 0.02)');
 
-      trendChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [
-            {
-              label: '必要コイン残',
-              data: remainingNeeded,
-              borderColor: '#e11d48',
-              backgroundColor: 'transparent',
-              borderWidth: 2.5,
-              borderDash: [5, 4],
-              pointBackgroundColor: '#e11d48',
-              pointBorderColor: '#ffffff',
-              pointBorderWidth: 2,
-              pointRadius: 3.5,
-              pointHoverRadius: 5,
-              fill: false,
-              tension: 0.3,
-              order: 1
-            },
-            {
-              label: 'コイン残高推移',
-              data: balances,
-              borderColor: '#0284c7',
-              backgroundColor: balanceGradient,
-              borderWidth: 2.5,
-              pointBackgroundColor: '#0284c7',
-              pointBorderColor: '#ffffff',
-              pointBorderWidth: 2,
-              pointRadius: 3.5,
-              pointHoverRadius: 5,
-              fill: true,
-              tension: 0.3,
-              order: 2
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          layout: {
-            padding: {
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0
-            }
+        trendChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: '必要コイン残',
+                data: remainingNeeded,
+                borderColor: '#e11d48',
+                backgroundColor: 'transparent',
+                borderWidth: 2.5,
+                borderDash: [5, 4],
+                pointBackgroundColor: '#e11d48',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 3.5,
+                pointHoverRadius: 5,
+                fill: false,
+                tension: 0.3,
+                order: 1
+              },
+              {
+                label: 'コイン残高推移',
+                data: balances,
+                borderColor: '#0284c7',
+                backgroundColor: balanceGradient,
+                borderWidth: 2.5,
+                pointBackgroundColor: '#0284c7',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 3.5,
+                pointHoverRadius: 5,
+                fill: true,
+                tension: 0.3,
+                order: 2
+              }
+            ]
           },
-          interaction: {
-            mode: 'index',
-            intersect: false
-          },
-          plugins: {
-            legend: {
-              position: 'top',
-              align: 'end',
-              labels: {
-                boxWidth: 12,
-                boxHeight: 8,
-                usePointStyle: true,
-                pointStyle: 'circle',
-                font: {
-                  size: 11,
-                  weight: 'bold',
-                  family: '"Noto Sans JP", sans-serif'
-                },
-                padding: 12
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+              padding: {
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0
               }
             },
-            tooltip: {
-              backgroundColor: 'rgba(15, 23, 42, 0.9)',
-              titleFont: { size: 12, weight: 'bold' },
-              bodyFont: { size: 11 },
-              padding: 8,
-              cornerRadius: 8,
-              callbacks: {
-                label: function(context) {
-                  return ` ${context.dataset.label}: ${context.parsed.y.toLocaleString()} コイン`;
+            interaction: {
+              mode: 'index',
+              intersect: false
+            },
+            plugins: {
+              legend: {
+                position: 'top',
+                align: 'end',
+                labels: {
+                  boxWidth: 12,
+                  boxHeight: 8,
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                  font: {
+                    size: 11,
+                    weight: 'bold',
+                    family: '"Noto Sans JP", sans-serif'
+                  },
+                  padding: 12
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                titleFont: { size: 12, weight: 'bold' },
+                bodyFont: { size: 11 },
+                padding: 8,
+                cornerRadius: 8,
+                callbacks: {
+                  label: function(context) {
+                    return ` ${context.dataset.label}: ${context.parsed.y.toLocaleString()} コイン`;
+                  }
                 }
               }
-            }
-          },
-          scales: {
-            x: {
-              grid: {
-                display: false
-              },
-              ticks: {
-                font: {
-                  size: 11,
-                  weight: 'bold'
-                },
-                color: '#64748b'
-              }
             },
-            y: {
-              beginAtZero: true,
-              grid: {
-                color: '#f1f5f9'
-              },
-              ticks: {
-                font: {
-                  size: 10,
-                  weight: '600'
+            scales: {
+              x: {
+                grid: {
+                  display: false
                 },
-                color: '#94a3b8',
-                callback: function(value) {
-                  return value.toLocaleString();
+                ticks: {
+                  font: {
+                    size: 11,
+                    weight: 'bold'
+                  },
+                  color: '#64748b'
+                }
+              },
+              y: {
+                beginAtZero: true,
+                grid: {
+                  color: '#f1f5f9'
+                },
+                ticks: {
+                  font: {
+                    size: 10,
+                    weight: '600'
+                  },
+                  color: '#94a3b8',
+                  callback: function(value) {
+                    return value.toLocaleString();
+                  }
                 }
               }
             }
           }
-        }
-      });
+        });
+      } catch (err) {
+        console.error('Trend chart render error:', err);
+      }
     };
 
     const toggleReportMode = () => {

@@ -538,185 +538,90 @@
     <!-- ⓪ 【閲覧専用モード表示】：PC 2列 / スマホ 1列のシンプル一覧UI (isReportModeがtrueの時) -->
     <!-- ========================================== -->
     <!-- ========================================== -->
-    <!-- ⓪ 【閲覧専用モード表示】：PC 2列(左列前半/右列後半) / スマホ 1列のシンプル一覧UI (isReportModeがtrueの時) -->
+    <!-- ⓪ 【閲覧専用モード表示】：PC 2列(左列前半/右列後半) / スマホ 1列のシンプル一覧UI -->
     <!-- ========================================== -->
-    <div v-if="isReportMode" class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-      <!-- 左列 (前半) / スマホでは全件 -->
-      <div class="space-y-2">
-        <div v-for="student in (isMobileView ? filteredStudents : reportStudentsColumns.left)" :key="student.id"
-          :class="student.isPinned ? 'bg-amber-50/70 border-amber-300 shadow-xs' : 'bg-white border-slate-200 shadow-2xs'"
-          class="rounded-xl border p-2.5 transition flex items-center justify-between gap-3">
-          
-          <!-- 左側：📌 ＋ アイコン -->
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <!-- 📌 ピン留め -->
-            <button @click="togglePin(student)" class="p-0.5 text-xs active:scale-95 flex-shrink-0" title="ピン留め">
-              <i class="fa-solid fa-thumbtack"
-                :class="student.isPinned ? 'text-amber-500 rotate-[-45deg] scale-110 drop-shadow-xs' : 'text-slate-300 hover:text-slate-400'"></i>
-            </button>
+    <div v-if="isReportMode" class="columns-1 md:columns-2 gap-2.5 space-y-2">
+      <div v-for="student in filteredStudents" :key="student.id"
+        :class="student.isPinned ? 'bg-amber-50/70 border-amber-300 shadow-xs' : 'bg-white border-slate-200 shadow-2xs'"
+        class="break-inside-avoid rounded-xl border p-2.5 transition flex items-center justify-between gap-3 mb-2">
+        
+        <!-- 左側：📌 ＋ アイコン -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button @click="togglePin(student)" class="p-0.5 text-xs active:scale-95 flex-shrink-0" title="ピン留め">
+            <i class="fa-solid fa-thumbtack"
+              :class="student.isPinned ? 'text-amber-500 rotate-[-45deg] scale-110 drop-shadow-xs' : 'text-slate-300 hover:text-slate-400'"></i>
+          </button>
 
-            <!-- アイコン -->
-            <div class="relative flex-shrink-0">
-              <img :src="student.icon" :alt="student.name" @error="onImageError($event, student)"
-                class="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200 shadow-2xs">
-              <span v-if="student.isUnreleased"
-                class="absolute -top-1 -left-1 text-[7px] font-black bg-amber-500 text-white px-0.5 rounded leading-none">
-                未
+          <div class="relative flex-shrink-0">
+            <img :src="student.icon" :alt="student.name" @error="onImageError($event, student)"
+              class="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200 shadow-2xs">
+            <span v-if="student.isUnreleased"
+              class="absolute -top-1 -left-1 text-[7px] font-black bg-amber-500 text-white px-0.5 rounded leading-none">
+              未
+            </span>
+          </div>
+        </div>
+
+        <!-- 中央：生徒名 ＆ 星上げ (現在 → 目標 ＆ シークバー) -->
+        <div class="flex-1 min-w-0 px-1">
+          <div class="flex items-center justify-between text-xs font-black leading-none mb-1">
+            <div class="font-extrabold text-slate-800 text-xs sm:text-sm truncate max-w-[110px] sm:max-w-[130px] mr-1.5" :title="student.name">
+              {{ student.name }}
+            </div>
+            <div class="flex items-center space-x-1 flex-shrink-0">
+              <span class="text-amber-500 font-black text-xs inline-block w-10 text-left">
+                {{ getCompactGradeText(student.currentGrade) }}
+              </span>
+              <span class="text-slate-400 text-xs font-bold">+</span>
+              <span class="inline-block bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-right font-black text-xs text-slate-800 min-w-[36px]">
+                {{ student.currentPieces || 0 }}
+              </span>
+              <span class="text-slate-500 text-[11px] font-bold">文字</span>
+              <span class="text-slate-400 text-xs font-normal mx-0.5">→</span>
+              <span class="text-blue-600 font-black text-xs inline-block w-10 text-right">
+                {{ getCompactGradeText(student.targetGrade) }}
               </span>
             </div>
           </div>
 
-          <!-- 中央：生徒名 ＆ 星上げ (現在 → 目標 ＆ シークバー) -->
-          <div class="flex-1 min-w-0 px-1">
-            <!-- 1行目: 生徒名 ＆ 現在 [ 40 ] 文字 → 目標 -->
-            <div class="flex items-center justify-between text-xs font-black leading-none mb-1">
-              <div class="font-extrabold text-slate-800 text-xs sm:text-sm truncate max-w-[110px] sm:max-w-[130px] mr-1.5" :title="student.name">
-                {{ student.name }}
-              </div>
-              <div class="flex items-center space-x-1 flex-shrink-0">
-                <span class="text-amber-500 font-black text-xs inline-block w-10 text-left">
-                  {{ getCompactGradeText(student.currentGrade) }}
-                </span>
-                <span class="text-slate-400 text-xs font-bold">+</span>
-                <span class="inline-block bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-right font-black text-xs text-slate-800 min-w-[36px]">
-                  {{ student.currentPieces || 0 }}
-                </span>
-                <span class="text-slate-500 text-[11px] font-bold">文字</span>
-                <span class="text-slate-400 text-xs font-normal mx-0.5">→</span>
-                <span class="text-blue-600 font-black text-xs inline-block w-10 text-right">
-                  {{ getCompactGradeText(student.targetGrade) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- 2行目: シークバー (閲覧モード用: 操作不可・視覚表示のみ) -->
-            <div class="dual-range-container w-full pointer-events-none">
-              <div class="dual-range-track"></div>
-              <div class="dual-range-highlight"
-                :style="{
-                  left: (student.currentGrade / 7 * 100) + '%',
-                  width: ((student.targetGrade - student.currentGrade) / 7 * 100) + '%'
-                }"></div>
-              <input type="range" min="0" max="7" step="1"
-                :value="student.currentGrade"
-                disabled
-                class="dual-range-input thumb-current opacity-90 cursor-default">
-              <input type="range" min="0" max="7" step="1"
-                :value="student.targetGrade"
-                disabled
-                class="dual-range-input thumb-target opacity-90 cursor-default">
-            </div>
+          <!-- シークバー (固定表示) -->
+          <div class="dual-range-container w-full pointer-events-none">
+            <div class="dual-range-track"></div>
+            <div class="dual-range-highlight"
+              :style="{
+                left: (student.currentGrade / 7 * 100) + '%',
+                width: ((student.targetGrade - student.currentGrade) / 7 * 100) + '%'
+              }"></div>
+            <input type="range" min="0" max="7" step="1"
+              :value="student.currentGrade"
+              disabled
+              class="dual-range-input thumb-current opacity-90 cursor-default">
+            <input type="range" min="0" max="7" step="1"
+              :value="student.targetGrade"
+              disabled
+              class="dual-range-input thumb-target opacity-90 cursor-default">
           </div>
-
-          <!-- 右側：目標達成予定月バッジ -->
-          <div class="flex-shrink-0 flex items-center justify-end">
-            <span v-if="getAchieveMonthText(student) === '達成済'"
-              class="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-2xs flex items-center gap-1">
-              <i class="fa-solid fa-circle-check text-[11px]"></i>達成済
-            </span>
-            <span v-else-if="getAchieveMonthText(student).includes('月達成')"
-              class="px-2.5 py-1 rounded-full text-xs font-black bg-sky-100 text-sky-800 border border-sky-300 shadow-2xs flex items-center gap-1">
-              <i class="fa-regular fa-calendar-check text-[11px] text-sky-600"></i>{{ getAchieveMonthText(student) }}
-            </span>
-            <span v-else-if="getAchieveMonthText(student) === '購入計画不足'"
-              class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="目標文字数に対して計画された購入数が不足しています">
-              計画不足
-            </span>
-            <span v-else class="text-slate-400 font-bold text-xs px-2">
-              -
-            </span>
-          </div>
-
         </div>
-      </div>
 
-      <!-- 右列 (後半) / PC表示時のみ表示 -->
-      <div v-if="!isMobileView" class="space-y-2">
-        <div v-for="student in reportStudentsColumns.right" :key="student.id"
-          :class="student.isPinned ? 'bg-amber-50/70 border-amber-300 shadow-xs' : 'bg-white border-slate-200 shadow-2xs'"
-          class="rounded-xl border p-2.5 transition flex items-center justify-between gap-3">
-          
-          <!-- 左側：📌 ＋ アイコン -->
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <!-- 📌 ピン留め -->
-            <button @click="togglePin(student)" class="p-0.5 text-xs active:scale-95 flex-shrink-0" title="ピン留め">
-              <i class="fa-solid fa-thumbtack"
-                :class="student.isPinned ? 'text-amber-500 rotate-[-45deg] scale-110 drop-shadow-xs' : 'text-slate-300 hover:text-slate-400'"></i>
-            </button>
-
-            <!-- アイコン -->
-            <div class="relative flex-shrink-0">
-              <img :src="student.icon" :alt="student.name" @error="onImageError($event, student)"
-                class="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200 shadow-2xs">
-              <span v-if="student.isUnreleased"
-                class="absolute -top-1 -left-1 text-[7px] font-black bg-amber-500 text-white px-0.5 rounded leading-none">
-                未
-              </span>
-            </div>
-          </div>
-
-          <!-- 中央：生徒名 ＆ 星上げ (現在 → 目標 ＆ シークバー) -->
-          <div class="flex-1 min-w-0 px-1">
-            <!-- 1行目: 生徒名 ＆ 現在 [ 40 ] 文字 → 目標 -->
-            <div class="flex items-center justify-between text-xs font-black leading-none mb-1">
-              <div class="font-extrabold text-slate-800 text-xs sm:text-sm truncate max-w-[110px] sm:max-w-[130px] mr-1.5" :title="student.name">
-                {{ student.name }}
-              </div>
-              <div class="flex items-center space-x-1 flex-shrink-0">
-                <span class="text-amber-500 font-black text-xs inline-block w-10 text-left">
-                  {{ getCompactGradeText(student.currentGrade) }}
-                </span>
-                <span class="text-slate-400 text-xs font-bold">+</span>
-                <span class="inline-block bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-right font-black text-xs text-slate-800 min-w-[36px]">
-                  {{ student.currentPieces || 0 }}
-                </span>
-                <span class="text-slate-500 text-[11px] font-bold">文字</span>
-                <span class="text-slate-400 text-xs font-normal mx-0.5">→</span>
-                <span class="text-blue-600 font-black text-xs inline-block w-10 text-right">
-                  {{ getCompactGradeText(student.targetGrade) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- 2行目: シークバー (閲覧モード用: 操作不可・視覚表示のみ) -->
-            <div class="dual-range-container w-full pointer-events-none">
-              <div class="dual-range-track"></div>
-              <div class="dual-range-highlight"
-                :style="{
-                  left: (student.currentGrade / 7 * 100) + '%',
-                  width: ((student.targetGrade - student.currentGrade) / 7 * 100) + '%'
-                }"></div>
-              <input type="range" min="0" max="7" step="1"
-                :value="student.currentGrade"
-                disabled
-                class="dual-range-input thumb-current opacity-90 cursor-default">
-              <input type="range" min="0" max="7" step="1"
-                :value="student.targetGrade"
-                disabled
-                class="dual-range-input thumb-target opacity-90 cursor-default">
-            </div>
-          </div>
-
-          <!-- 右側：目標達成予定月バッジ -->
-          <div class="flex-shrink-0 flex items-center justify-end">
-            <span v-if="getAchieveMonthText(student) === '達成済'"
-              class="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-2xs flex items-center gap-1">
-              <i class="fa-solid fa-circle-check text-[11px]"></i>達成済
-            </span>
-            <span v-else-if="getAchieveMonthText(student).includes('月達成')"
-              class="px-2.5 py-1 rounded-full text-xs font-black bg-sky-100 text-sky-800 border border-sky-300 shadow-2xs flex items-center gap-1">
-              <i class="fa-regular fa-calendar-check text-[11px] text-sky-600"></i>{{ getAchieveMonthText(student) }}
-            </span>
-            <span v-else-if="getAchieveMonthText(student) === '購入計画不足'"
-              class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="目標文字数に対して計画された購入数が不足しています">
-              計画不足
-            </span>
-            <span v-else class="text-slate-400 font-bold text-xs px-2">
-              -
-            </span>
-          </div>
-
+        <!-- 右側：目標達成予定月バッジ -->
+        <div class="flex-shrink-0 flex items-center justify-end">
+          <span v-if="getAchieveMonthText(student) === '達成済'"
+            class="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-2xs flex items-center gap-1">
+            <i class="fa-solid fa-circle-check text-[11px]"></i>達成済
+          </span>
+          <span v-else-if="getAchieveMonthText(student).includes('月達成')"
+            class="px-2.5 py-1 rounded-full text-xs font-black bg-sky-100 text-sky-800 border border-sky-300 shadow-2xs flex items-center gap-1">
+            <i class="fa-regular fa-calendar-check text-[11px] text-sky-600"></i>{{ getAchieveMonthText(student) }}
+          </span>
+          <span v-else-if="getAchieveMonthText(student) === '購入計画不足'"
+            class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="目標文字数に対して計画された購入数が不足しています">
+            計画不足
+          </span>
+          <span v-else class="text-slate-400 font-bold text-xs px-2">
+            -
+          </span>
         </div>
+
       </div>
     </div>
 
