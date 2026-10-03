@@ -265,7 +265,7 @@ const STUDENTS_MASTER = [
     defense: "特殊装甲",
     releaseDate: "2024/07/22",
     event: "Sheside outside報酬",
-    isUnreleased: true // 未追加生徒
+    isUnreleased: false
   },
   {
     id: 20,

@@ -876,6 +876,16 @@ createApp({
       return list;
     });
 
+    // 閲覧専用モード用：PCで左列に前半、右列に後半を配置するための2分割リスト
+    const reportStudentsColumns = computed(() => {
+      const list = filteredStudents.value;
+      const mid = Math.ceil(list.length / 2);
+      return {
+        left: list.slice(0, mid),
+        right: list.slice(mid)
+      };
+    });
+
     // 【要件追加】：一括max購入処理
     // fromMonthOffset: 0 (今月からmax購入処理), 1 (翌月からmax購入処理)
     const applyMaxBuy = (fromMonthOffset = 0) => {
@@ -1281,6 +1291,12 @@ createApp({
               if (saved.buyPlans) target.buyPlans = saved.buyPlans;
               if (saved.isPinned !== undefined) target.isPinned = saved.isPinned;
 
+              // マスターデータ側で追加済みに更新された可能性を考慮してisUnreleasedをマスターと同期
+              const master = rawMaster.find(m => m.id === target.id);
+              if (master) {
+                target.isUnreleased = master.isUnreleased;
+              }
+
               // 未追加生徒はショップ購入不可のためbuyPlansを空にする
               if (target.isUnreleased) {
                 target.buyPlans = {};
@@ -1398,7 +1414,8 @@ createApp({
       importData,
       isReportMode,
       toggleReportMode,
-      getAchieveMonthText
+      getAchieveMonthText,
+      reportStudentsColumns
     };
   }
 }).mount('#app');
