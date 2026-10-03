@@ -335,17 +335,14 @@
         <!-- 右カラム：通常時は3ヶ月集計カード、閲覧モード時は直近6か月の折れ線グラフ -->
         <div class="lg:col-span-7">
           
-          <!-- ① 閲覧専用モード時：直近6か月のコイン残高推移 ＆ 必要コイン残グラフ -->
-          <div v-if="isReportMode" class="bg-white rounded-xl p-2.5 sm:p-3 border border-sky-200 shadow-2xs">
-            <div class="flex items-center justify-between mb-1.5 px-1">
-              <span class="text-xs font-black text-slate-700 flex items-center gap-1.5">
+          <!-- ① 閲覧専用モード時：直近6か月のコイン残高推移 ＆ 必要コイン残グラフ (集計欄の高さを通常時と一致) -->
+          <div v-if="isReportMode" class="bg-white rounded-xl px-2.5 py-1 sm:px-3 sm:py-1.5 border border-sky-200 shadow-2xs relative">
+            <div class="absolute left-3 top-2 pointer-events-none z-10">
+              <span class="text-[11px] sm:text-xs font-black text-slate-700 flex items-center gap-1.5">
                 <i class="fa-solid fa-chart-area text-sky-600"></i>直近6か月のコイン残高 ＆ 必要残推移
               </span>
-              <span class="text-[10px] text-slate-400 font-semibold">
-                {{ displayMonths[0].month }}月 〜 {{ displayMonths[0].month + 5 > 12 ? (displayMonths[0].month + 5 - 12) : displayMonths[0].month + 5 }}月
-              </span>
             </div>
-            <div class="w-full h-36 sm:h-40 relative">
+            <div class="w-full h-28 sm:h-32 relative">
               <canvas id="trendChartCanvas"></canvas>
             </div>
           </div>

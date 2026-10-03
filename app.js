@@ -663,21 +663,6 @@ createApp({
           labels,
           datasets: [
             {
-              label: 'コイン残高推移',
-              data: balances,
-              borderColor: '#0284c7',
-              backgroundColor: balanceGradient,
-              borderWidth: 2.5,
-              pointBackgroundColor: '#0284c7',
-              pointBorderColor: '#ffffff',
-              pointBorderWidth: 2,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              fill: true,
-              tension: 0.3,
-              order: 2
-            },
-            {
               label: '必要コイン残',
               data: remainingNeeded,
               borderColor: '#e11d48',
@@ -687,17 +672,40 @@ createApp({
               pointBackgroundColor: '#e11d48',
               pointBorderColor: '#ffffff',
               pointBorderWidth: 2,
-              pointRadius: 4,
-              pointHoverRadius: 6,
+              pointRadius: 3.5,
+              pointHoverRadius: 5,
               fill: false,
               tension: 0.3,
               order: 1
+            },
+            {
+              label: 'コイン残高推移',
+              data: balances,
+              borderColor: '#0284c7',
+              backgroundColor: balanceGradient,
+              borderWidth: 2.5,
+              pointBackgroundColor: '#0284c7',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 3.5,
+              pointHoverRadius: 5,
+              fill: true,
+              tension: 0.3,
+              order: 2
             }
           ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          layout: {
+            padding: {
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0
+            }
+          },
           interaction: {
             mode: 'index',
             intersect: false
@@ -707,7 +715,7 @@ createApp({
               position: 'top',
               align: 'end',
               labels: {
-                boxWidth: 14,
+                boxWidth: 12,
                 boxHeight: 8,
                 usePointStyle: true,
                 pointStyle: 'circle',
@@ -716,7 +724,7 @@ createApp({
                   weight: 'bold',
                   family: '"Noto Sans JP", sans-serif'
                 },
-                padding: 10
+                padding: 12
               }
             },
             tooltip: {
