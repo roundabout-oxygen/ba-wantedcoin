@@ -716,7 +716,7 @@ createApp({
                 position: 'top',
                 align: 'end',
                 labels: {
-                  boxWidth: 12,
+                  boxWidth: 10,
                   boxHeight: 8,
                   usePointStyle: true,
                   pointStyle: 'circle',
@@ -725,7 +725,7 @@ createApp({
                     weight: 'bold',
                     family: '"Noto Sans JP", sans-serif'
                   },
-                  padding: 12
+                  padding: 8
                 }
               },
               tooltip: {
