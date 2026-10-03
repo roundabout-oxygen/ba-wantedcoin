@@ -921,21 +921,30 @@
         <div class="p-3 sm:p-5 overflow-y-auto space-y-4 text-xs text-slate-700">
           
           <!-- 繰越ステータス / 注意メッセージ -->
-          <div v-if="rolloverPreview.canExecute" class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-emerald-800">
+          <div v-if="rolloverPreview.statusType === 'ready'" class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-emerald-800">
             <i class="fa-solid fa-circle-check text-base text-emerald-600 mt-0.5 flex-shrink-0"></i>
             <div>
               <div class="font-bold text-sm">繰越処理を実行できます</div>
               <p class="text-[11px] text-emerald-700 mt-0.5">
-                端末の日時が {{ rolloverPreview.toYear }}年{{ rolloverPreview.toMonth }}月 になりました。下の「繰越処理を実行する」ボタンを押すと、星上げの反映と購入予定のシフトが行われます。
+                端末の日時が {{ rolloverPreview.toYear }}年{{ rolloverPreview.toMonth }}月 に達しました。下の「繰越処理を実行する」ボタンを押すと、星上げの反映と購入予定のシフトが行われます。
               </p>
             </div>
           </div>
-          <div v-else class="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800">
-            <i class="fa-solid fa-circle-info text-base text-amber-500 mt-0.5 flex-shrink-0"></i>
+          <div v-else-if="rolloverPreview.statusType === 'outdated'" class="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800">
+            <i class="fa-solid fa-triangle-exclamation text-base text-amber-500 mt-0.5 flex-shrink-0"></i>
             <div>
-              <div class="font-bold text-sm">現在はプレビュー表示です</div>
+              <div class="font-bold text-sm">設定月から時間が経過しています</div>
               <p class="text-[11px] text-amber-700 mt-0.5">
-                月跨ぎ前の事前確認ができます。端末の日時が <span class="font-bold underline">{{ rolloverPreview.toYear }}年{{ rolloverPreview.toMonth }}月</span> に達すると「繰越処理を実行する」ボタンが有効化されます。
+                端末の日時（{{ rolloverPreview.realDate.year }}年{{ rolloverPreview.realDate.month }}月）とアプリの設定月（{{ rolloverPreview.fromYear }}年{{ rolloverPreview.fromMonth }}月）が離れています。日付プルダウンから直接当月を設定するか、必要に応じて繰越を実行してください。
+              </p>
+            </div>
+          </div>
+          <div v-else class="p-3 bg-sky-50 border border-sky-200 rounded-xl flex items-start gap-2.5 text-sky-800">
+            <i class="fa-solid fa-circle-info text-base text-sky-500 mt-0.5 flex-shrink-0"></i>
+            <div>
+              <div class="font-bold text-sm">現在は事前確認プレビューです</div>
+              <p class="text-[11px] text-sky-700 mt-0.5">
+                月跨ぎ前の事前確認ができます。端末の日時が <span class="font-bold underline">{{ rolloverPreview.toYear }}年{{ rolloverPreview.toMonth }}月</span> に達すると「繰越処理を実行する」が有効化されます。今すぐテストや手動で進めたい場合は「今すぐ繰越（手動）」で実行できます。
               </p>
             </div>
           </div>
@@ -1050,22 +1059,32 @@
         </div>
 
         <!-- モーダルフッター操作ボタン -->
-        <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 flex-shrink-0">
-          <button @click="closeRolloverModal"
-            class="px-3.5 py-1.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-white active:scale-95 transition font-bold text-xs shadow-2xs">
-            キャンセル
-          </button>
-          <button @click="executeRollover"
-            :disabled="!rolloverPreview.canExecute"
-            :class="[
-              !rolloverPreview.canExecute
-                ? 'opacity-40 cursor-not-allowed bg-slate-300 text-slate-500 border-slate-300 shadow-none'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 shadow-md border-emerald-500'
-            ]"
-            class="px-4 py-1.5 rounded-xl border font-bold text-xs transition flex items-center gap-1.5"
-            :title="!rolloverPreview.canExecute ? '端末の日時が翌月になるまで実行できません' : '繰越処理を実行します'">
-            <i class="fa-solid fa-check"></i> 繰越処理を実行する
-          </button>
+        <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+          <div>
+            <!-- 手動/テスト繰越ボタン (月跨ぎ前でも確認付きで手動実行可能) -->
+            <button v-if="!rolloverPreview.canExecute" @click="executeRollover(true)"
+              class="px-2.5 py-1 text-[11px] text-slate-500 hover:text-slate-800 underline transition"
+              title="端末の日時を待たずに今すぐテスト・手動で繰越処理を実行します">
+              <i class="fa-solid fa-play text-[10px]"></i> 今すぐ繰越を実行（手動・テスト）
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button @click="closeRolloverModal"
+              class="px-3.5 py-1.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-white active:scale-95 transition font-bold text-xs shadow-2xs">
+              閉じる
+            </button>
+            <button @click="executeRollover(false)"
+              :disabled="!rolloverPreview.canExecute"
+              :class="[
+                !rolloverPreview.canExecute
+                  ? 'opacity-40 cursor-not-allowed bg-slate-300 text-slate-500 border-slate-300 shadow-none'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 shadow-md border-emerald-500'
+              ]"
+              class="px-4 py-1.5 rounded-xl border font-bold text-xs transition flex items-center gap-1.5"
+              :title="!rolloverPreview.canExecute ? '端末の日時が翌月になるまで実行できません（左の手動実行もご利用いただけます）' : '繰越処理を実行します'">
+              <i class="fa-solid fa-check"></i> 繰越処理を実行する
+            </button>
+          </div>
         </div>
 
       </div>

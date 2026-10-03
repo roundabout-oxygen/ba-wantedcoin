@@ -135,13 +135,13 @@ createApp({
 
     // オフセット付き年月取得ヘルパー (今月の場合は日割り日数を反映)
     const getYmByOffset = (offset) => {
-      const d = new Date(currentYear, currentMonth - 1 + offset, 1);
+      const d = new Date(baseYear.value, baseMonth.value - 1 + offset, 1);
       const year = d.getFullYear();
       const month = d.getMonth() + 1;
       const daysInMonth = new Date(year, month, 0).getDate();
-      const isCurrent = (year === currentYear && month === currentMonth);
+      const isCurrent = (year === baseYear.value && month === baseMonth.value);
       const days = isCurrent ? currentMonthEffectiveDays.value : daysInMonth;
-      const isProrated = isCurrent && (startMonth.value === currentMonth && (startDay.value || 1) > 1);
+      const isProrated = isCurrent && (startMonth.value === baseMonth.value && (startDay.value || 1) > 1);
       const daysText = isProrated ? `${days}日 (日割)` : `${days}日`;
 
       return {
@@ -167,14 +167,14 @@ createApp({
 
     // 過去データがある最古のオフセット (なければ 0)
     const oldestOffset = computed(() => {
-      const currentKey = toYmKey(currentYear, currentMonth);
+      const currentKey = toYmKey(baseYear.value, baseMonth.value);
       let minOff = 0;
       students.value.forEach(s => {
         if (s.buyPlans) {
           Object.keys(s.buyPlans).forEach(k => {
             if (k < currentKey && (s.buyPlans[k] || 0) > 0) {
               const [y, m] = k.split('-').map(Number);
-              const off = (y - currentYear) * 12 + (m - currentMonth);
+              const off = (y - baseYear.value) * 12 + (m - baseMonth.value);
               if (off < minOff) minOff = off;
             }
           });
@@ -185,14 +185,14 @@ createApp({
 
     // 未来データがある最遠のオフセット (なければ 0)
     const furthestOffset = computed(() => {
-      const currentKey = toYmKey(currentYear, currentMonth);
+      const currentKey = toYmKey(baseYear.value, baseMonth.value);
       let maxOff = 0;
       students.value.forEach(s => {
         if (s.buyPlans) {
           Object.keys(s.buyPlans).forEach(k => {
             if (k > currentKey && (s.buyPlans[k] || 0) > 0) {
               const [y, m] = k.split('-').map(Number);
-              const off = (y - currentYear) * 12 + (m - currentMonth);
+              const off = (y - baseYear.value) * 12 + (m - baseMonth.value);
               if (off > maxOff) maxOff = off;
             }
           });
@@ -385,11 +385,13 @@ createApp({
       if (student.isUnreleased) return;
       student.isEdited = true;
       const ym = displayMonths.value[monthIndex].key;
-      if (!student.buyPlans) student.buyPlans = {};
-      const current = student.buyPlans[ym] || 0;
+      const current = student.buyPlans?.[ym] || 0;
 
       if (current < 80 && canBuyMoreInMonth(student, monthIndex)) {
-        student.buyPlans[ym] = Math.min(80, current + 5);
+        student.buyPlans = {
+          ...(student.buyPlans || {}),
+          [ym]: Math.min(80, current + 5)
+        };
       }
     };
 
@@ -397,11 +399,13 @@ createApp({
       if (student.isUnreleased) return;
       student.isEdited = true;
       const ym = displayMonths.value[monthIndex].key;
-      if (!student.buyPlans) student.buyPlans = {};
-      const current = student.buyPlans[ym] || 0;
+      const current = student.buyPlans?.[ym] || 0;
 
       if (current > 0) {
-        student.buyPlans[ym] = Math.max(0, current - 5);
+        student.buyPlans = {
+          ...(student.buyPlans || {}),
+          [ym]: Math.max(0, current - 5)
+        };
       }
     };
 
@@ -445,23 +449,24 @@ createApp({
       const neededBase = Math.max(0, targetCum - currentCum - (student.currentPieces || 0));
       const maxAllowedBuy = Math.max(0, neededBase - student.extraPieces);
 
-      if (!student.buyPlans) student.buyPlans = {};
-      const currentTotalBuy = Object.values(student.buyPlans).reduce((sum, v) => sum + (v || 0), 0);
+      const currentTotalBuy = Object.values(student.buyPlans || {}).reduce((sum, v) => sum + (v || 0), 0);
 
       if (currentTotalBuy > maxAllowedBuy) {
         let toReduce = currentTotalBuy - maxAllowedBuy;
-        const sortedKeys = Object.keys(student.buyPlans)
-          .filter(k => (student.buyPlans[k] || 0) > 0)
+        const newPlans = { ...(student.buyPlans || {}) };
+        const sortedKeys = Object.keys(newPlans)
+          .filter(k => (newPlans[k] || 0) > 0)
           .sort()
           .reverse();
 
         for (const k of sortedKeys) {
           if (toReduce <= 0) break;
-          const current = student.buyPlans[k] || 0;
+          const current = newPlans[k] || 0;
           const deduct = Math.min(current, toReduce);
-          student.buyPlans[k] -= deduct;
+          newPlans[k] -= deduct;
           toReduce -= deduct;
         }
+        student.buyPlans = newPlans;
       }
     };
 
@@ -646,7 +651,7 @@ createApp({
     // 【要件追加】：一括max購入処理
     // fromMonthOffset: 0 (今月からmax購入処理), 1 (翌月からmax購入処理)
     const applyMaxBuy = (fromMonthOffset = 0) => {
-      const currentKey = toYmKey(currentYear, currentMonth);
+      const currentKey = toYmKey(baseYear.value, baseMonth.value);
 
       students.value.forEach(student => {
         // 未追加生徒・未編集生徒は除外
@@ -655,28 +660,29 @@ createApp({
         const totalNeeded = getRawRequiredPieces(student);
         if (totalNeeded <= 0) return;
 
-        if (!student.buyPlans) student.buyPlans = {};
+        const newPlans = {};
+        // 過去月の購入データを保持
+        if (student.buyPlans) {
+          Object.keys(student.buyPlans).forEach(k => {
+            if (k < currentKey) {
+              newPlans[k] = student.buyPlans[k];
+            }
+          });
+        }
 
-        let remaining = totalNeeded;
+        // 過去月購入累計
+        let pastBought = 0;
+        Object.keys(newPlans).forEach(k => {
+          pastBought += (newPlans[k] || 0);
+        });
+
+        let remaining = Math.max(0, totalNeeded - pastBought);
 
         if (fromMonthOffset === 1) {
           // 翌月からmax購入: 今月(offset=0)の購入数は維持
-          const currentBuy = student.buyPlans[currentKey] || 0;
-          remaining = Math.max(0, totalNeeded - currentBuy);
-
-          // 翌月以降の既存プランを一旦クリア
-          Object.keys(student.buyPlans).forEach(k => {
-            if (k > currentKey) {
-              delete student.buyPlans[k];
-            }
-          });
-        } else {
-          // 今月からmax購入: 今月以降の既存プランを一旦クリア (過去データは維持)
-          Object.keys(student.buyPlans).forEach(k => {
-            if (k >= currentKey) {
-              delete student.buyPlans[k];
-            }
-          });
+          const currentBuy = student.buyPlans?.[currentKey] || 0;
+          newPlans[currentKey] = currentBuy;
+          remaining = Math.max(0, remaining - currentBuy);
         }
 
         // fromMonthOffset から順に各月に最大80個ずつ割り振る
@@ -684,10 +690,12 @@ createApp({
         while (remaining > 0 && off < 60) {
           const ymInfo = getYmByOffset(off);
           const buy = Math.min(80, remaining);
-          student.buyPlans[ymInfo.key] = buy;
+          newPlans[ymInfo.key] = buy;
           remaining -= buy;
           off++;
         }
+
+        student.buyPlans = newPlans;
       });
 
       closeBatchMenu();
@@ -725,7 +733,7 @@ createApp({
         hasMonthly.value = false;
         hasMonthlyHalf.value = false;
         hideUnreleased.value = true;
-        startMonth.value = currentMonth;
+        startMonth.value = baseMonth.value;
         startDay.value = 1;
         sortKey.value = 'releaseDate_asc';
         filterRole.value = 'ALL';
@@ -778,14 +786,6 @@ createApp({
     // 一括設定から「次月へ繰越処理」をクリックした時のハンドラ
     const openRolloverModal = () => {
       closeBatchMenu();
-      const real = getRealToday();
-      const monthDiff = (real.year - baseYear.value) * 12 + (real.month - baseMonth.value);
-
-      if (monthDiff >= 2 || monthDiff < 0) {
-        alert(`設定月（${baseYear.value}年${baseMonth.value}月）から2ヶ月以上経過しているか未来の日時となっています。\n日付プルダウンから直接設定月を変更するか、最初から入力し直してください。`);
-        return;
-      }
-
       isRolloverModalOpen.value = true;
     };
 
@@ -804,7 +804,15 @@ createApp({
       const carriedCoins = Math.max(0, monthsSummary.value[0]?.balance || 0);
 
       const real = getRealToday();
+      const monthDiff = (real.year - fromYear) * 12 + (real.month - fromMonth);
       const canExecute = (real.year === toYear && real.month === toMonth);
+
+      let statusType = 'preview';
+      if (canExecute) {
+        statusType = 'ready';
+      } else if (monthDiff >= 2) {
+        statusType = 'outdated';
+      }
 
       const currentKey = toYmKey(fromYear, fromMonth);
 
@@ -847,21 +855,24 @@ createApp({
         toMonth,
         carriedCoins,
         canExecute,
+        statusType,
+        monthDiff,
         realDate: real,
         studentPreviews
       };
     });
 
     // 繰越処理の確定実行
-    const executeRollover = () => {
+    const executeRollover = (force = false) => {
       const prev = rolloverPreview.value;
-      if (!prev.canExecute) {
-        alert(`実際の端末の日時が ${prev.toYear}年${prev.toMonth}月 になるまで確定実行できません。`);
-        return;
-      }
-
-      if (!confirm(`${prev.toYear}年${prev.toMonth}月へ繰越処理を実行します。\n前月末残高(${formatNumber(prev.carriedCoins)}コイン)を引き継ぎ、星上げと購入予定を次月へ進めます。よろしいですか？`)) {
-        return;
+      if (!prev.canExecute && !force) {
+        if (!confirm(`端末の日時（${prev.realDate.year}年${prev.realDate.month}月）はまだ設定月の翌月（${prev.toYear}年${prev.toMonth}月）ではありません。\nテスト・手動操作として${prev.toMonth}月へ繰越を実行しますか？`)) {
+          return;
+        }
+      } else {
+        if (!confirm(`${prev.toYear}年${prev.toMonth}月へ繰越処理を実行します。\n前月末残高(${formatNumber(prev.carriedCoins)}コイン)を引き継ぎ、星上げと購入予定を次月へ進めます。よろしいですか？`)) {
+          return;
+        }
       }
 
       const fromKey = toYmKey(prev.fromYear, prev.fromMonth);
