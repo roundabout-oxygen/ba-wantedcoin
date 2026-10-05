@@ -1019,11 +1019,15 @@ createApp({
           remaining = Math.max(0, remaining - currentBuy);
         }
 
-        // fromMonthOffset から順に各月に最大80個ずつ割り振る
+        // fromMonthOffset から順に各月に「5の倍数（最大80）」で割り振る
+        // 要件: 文字は5文字単位でしか購入できないため、必ず5の倍数になるようにする
         let off = fromMonthOffset;
-        while (remaining > 0 && off < 60) {
+        while (remaining >= 5 && off < 60) {
           const ymInfo = getYmByOffset(off);
-          const buy = Math.min(80, remaining);
+          // 5文字単位で最大80まで
+          const buyUnits = Math.min(16, Math.floor(remaining / 5));
+          const buy = buyUnits * 5;
+          if (buy <= 0) break;
           newPlans[ymInfo.key] = buy;
           remaining -= buy;
           off++;
