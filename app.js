@@ -603,12 +603,12 @@ createApp({
     };
 
     // 直近6か月のコイン残高推移 ＆ 必要コイン残推移データの算出
-    // 要件: 各月1日に購入でガクッと垂直(ほぼ90度)に下がり、そこから翌月1日に向かって線形に回復する。
+    // 要件: 各月1日に購入でガクッと垂直(90度)に下がり、そこから翌月1日に向かって線形に回復する。
     // プラス部分は青色、マイナス部分は赤色で塗る。
     const getSixMonthsData = () => {
-      const labels = [];
-      const balances = [];
-      const remainingNeeded = [];
+      const monthNames = [];
+      const balancePoints = [];
+      const neededPoints = [];
 
       let runningBalance = getStartingBalanceForOffset(0);
 
@@ -625,9 +625,9 @@ createApp({
         
         // ① 1日・購入直前 (前月末残高を引き継いだ状態)
         const day1BeforeBalance = runningBalance;
-        // ② 1日・購入直後 (90度ガクッと下がった状態)
+        // ② 1日・購入直後 (90度真下にガクッと下がった状態: x座標は同一の off)
         const day1AfterBalance = runningBalance - expense;
-        // ③ 月末 (1ヶ月かけて回復した状態)
+        // ③ 月末 (1ヶ月かけて回復した状態: x座標は off + 1)
         const endOfMonthBalance = day1AfterBalance + income;
 
         // その月終了時点での全生徒の「必要コインの残」
@@ -640,25 +640,23 @@ createApp({
         }, 0);
         const reqCoins = remainingPieces * 10;
 
-        // 1日 (購入前)
-        labels.push(`${ymInfo.month}月`);
-        balances.push(day1BeforeBalance);
-        remainingNeeded.push(reqCoins);
+        monthNames.push(`${ymInfo.month}月`);
 
-        // 1日 (購入直後: ほぼ垂直に下がる)
-        labels.push(`${ymInfo.month}月 (購入後)`);
-        balances.push(day1AfterBalance);
-        remainingNeeded.push(reqCoins);
+        // コイン残高推移:
+        // 1. 同一x座標(off)で [購入前] -> [購入直後] の垂直線(90度)
+        balancePoints.push({ x: off, y: day1BeforeBalance, desc: `${ymInfo.month}月1日 (購入前)` });
+        balancePoints.push({ x: off, y: day1AfterBalance, desc: `${ymInfo.month}月1日 (購入後)` });
+        // 2. 翌月1日(off + 1)に向けて線形に回復
+        balancePoints.push({ x: off + 1, y: endOfMonthBalance, desc: `${ymInfo.month}月末` });
 
-        // 月末 (日々のコイン獲得で線形回復)
-        labels.push(`${ymInfo.month}月末`);
-        balances.push(endOfMonthBalance);
-        remainingNeeded.push(reqCoins);
+        // 必要コイン残推移:
+        neededPoints.push({ x: off, y: reqCoins, desc: `${ymInfo.month}月` });
+        neededPoints.push({ x: off + 1, y: reqCoins, desc: `${ymInfo.month}月` });
 
         runningBalance = endOfMonthBalance;
       }
 
-      return { labels, balances, remainingNeeded };
+      return { monthNames, balancePoints, neededPoints };
     };
 
     // Chart.js の描画・更新
@@ -672,7 +670,7 @@ createApp({
           trendChartInstance = null;
         }
 
-        const { labels, balances, remainingNeeded } = getSixMonthsData();
+        const { monthNames, balancePoints, neededPoints } = getSixMonthsData();
 
         // プラスは青色、マイナスは赤色のグラデーション背景
         const getDualColorGradient = (context) => {
@@ -701,11 +699,10 @@ createApp({
         trendChartInstance = new Chart(canvas, {
           type: 'line',
           data: {
-            labels,
             datasets: [
               {
                 label: '必要コイン残',
-                data: remainingNeeded,
+                data: neededPoints,
                 borderColor: '#e11d48',
                 backgroundColor: 'transparent',
                 borderWidth: 2,
@@ -714,9 +711,8 @@ createApp({
                 pointBorderColor: '#ffffff',
                 pointBorderWidth: 1.5,
                 pointRadius: function(context) {
-                  // 各月の代表点のみ丸を表示してすっきりさせる
-                  const lbl = labels[context.dataIndex] || '';
-                  return lbl.endsWith('月') ? 2.5 : 0;
+                  const pt = context.raw;
+                  return pt && Number.isInteger(pt.x) ? 2.5 : 0;
                 },
                 pointHoverRadius: 4.5,
                 fill: false,
@@ -725,21 +721,22 @@ createApp({
               },
               {
                 label: 'コイン残高推移',
-                data: balances,
+                data: balancePoints,
                 borderColor: '#0284c7',
                 backgroundColor: function(context) {
                   return getDualColorGradient(context);
                 },
                 borderWidth: 2.2,
                 pointBackgroundColor: function(context) {
-                  const val = context.parsed ? context.parsed.y : balances[context.dataIndex];
+                  const val = context.raw ? context.raw.y : 0;
                   return val < 0 ? '#f43f5e' : '#0284c7';
                 },
                 pointBorderColor: '#ffffff',
                 pointBorderWidth: 1.5,
                 pointRadius: function(context) {
-                  const lbl = labels[context.dataIndex] || '';
-                  return lbl.includes('購入後') || lbl.endsWith('月') ? 2.5 : 0;
+                  const pt = context.raw;
+                  // 購入後または月整数の主要ポイントに丸を表示
+                  return pt && pt.desc && (pt.desc.includes('購入後') || pt.desc.includes('月末')) ? 2.5 : 0;
                 },
                 pointHoverRadius: 5,
                 fill: true,
@@ -760,7 +757,7 @@ createApp({
               }
             },
             interaction: {
-              mode: 'index',
+              mode: 'nearest',
               intersect: false
             },
             plugins: {
@@ -789,31 +786,34 @@ createApp({
                 callbacks: {
                   title: function(items) {
                     if (!items.length) return '';
-                    const idx = items[0].dataIndex;
-                    return labels[idx] || '';
+                    const pt = items[0].raw;
+                    return pt && pt.desc ? pt.desc : '';
                   },
                   label: function(context) {
-                    return ` ${context.dataset.label}: ${context.parsed.y.toLocaleString()} コイン`;
+                    const yVal = context.raw ? context.raw.y : context.parsed.y;
+                    return ` ${context.dataset.label}: ${Math.round(yVal).toLocaleString()} コイン`;
                   }
                 }
               }
             },
             scales: {
               x: {
+                type: 'linear',
+                min: 0,
+                max: 6,
                 grid: {
                   display: false
                 },
                 ticks: {
+                  stepSize: 1,
                   font: {
                     size: 10,
                     weight: 'bold'
                   },
                   color: '#64748b',
-                  callback: function(val, index) {
-                    // 各月の先頭（"〇月"）のみラベル表示して重複・文字潰れを解消
-                    const lbl = labels[index] || '';
-                    if (/^\d+月$/.test(lbl)) {
-                      return lbl;
+                  callback: function(val) {
+                    if (Number.isInteger(val) && val >= 0 && val < monthNames.length) {
+                      return monthNames[val];
                     }
                     return '';
                   }
