@@ -820,21 +820,28 @@ createApp({
                 }
               },
               y: {
+                suggestedMin: 0,
+                suggestedMax: 0,
                 grid: {
                   color: function(context) {
-                    // 0コインの基準線を少し濃くしてプラス/マイナスの境目を強調
-                    return context.tick.value === 0 ? '#cbd5e1' : '#f1f5f9';
+                    // 0コインの基準線を黒の太線にして一目で0だと分かるように強調
+                    return context.tick.value === 0 ? '#1e293b' : '#f1f5f9';
                   },
                   lineWidth: function(context) {
-                    return context.tick.value === 0 ? 1.5 : 1;
-                  }
+                    return context.tick.value === 0 ? 2 : 1;
+                  },
+                  z: 10 // グリッド線が背景グラデーションより手前に描画されるように設定
                 },
                 ticks: {
-                  font: {
-                    size: 10,
-                    weight: '600'
+                  font: function(context) {
+                    return {
+                      size: 10,
+                      weight: context.tick.value === 0 ? '900' : '600'
+                    };
                   },
-                  color: '#94a3b8',
+                  color: function(context) {
+                    return context.tick.value === 0 ? '#0f172a' : '#94a3b8';
+                  },
                   callback: function(value) {
                     return value.toLocaleString();
                   }
