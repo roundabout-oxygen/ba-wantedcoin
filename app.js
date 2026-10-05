@@ -650,11 +650,22 @@ createApp({
         balancePoints.push({ x: off + 1, y: endOfMonthBalance, desc: `${ymInfo.month}月末` });
 
         // 必要コイン残推移:
-        neededPoints.push({ x: off, y: reqCoins, desc: `${ymInfo.month}月` });
-        neededPoints.push({ x: off + 1, y: reqCoins, desc: `${ymInfo.month}月` });
+        // 要件: 階段状ではなく、各月の初日ごとを直線で結んだ表示にする
+        neededPoints.push({ x: off, y: reqCoins, desc: `${ymInfo.month}月1日` });
 
         runningBalance = endOfMonthBalance;
       }
+
+      // 4か月目の終わり（次の月の初日）の必要コイン残も追加してx: 4まで直線をつなぐ
+      const nextYmInfo = getYmByOffset(4);
+      const nextRemainingPieces = students.value.reduce((sum, s) => {
+        if (s.isUnreleased || !s.isEdited) return sum;
+        const needed = getRawRequiredPieces(s);
+        if (needed <= 0) return sum;
+        const bought = getCumulativeBuyUpToYm(s, nextYmInfo.key);
+        return sum + Math.max(0, needed - bought);
+      }, 0);
+      neededPoints.push({ x: 4, y: nextRemainingPieces * 10, desc: `${nextYmInfo.month}月1日` });
 
       return { monthNames, balancePoints, neededPoints };
     };
