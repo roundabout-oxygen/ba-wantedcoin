@@ -602,9 +602,9 @@ createApp({
       return '購入計画不足';
     };
 
-    // 直近6か月のコイン残高推移 ＆ 必要コイン残推移データの算出
+    // 直近4か月のコイン残高推移 ＆ 必要コイン残推移データの算出
     // 要件: 各月1日に購入でガクッと垂直(90度)に下がり、そこから翌月1日に向かって線形に回復する。
-    // プラス部分は青色、マイナス部分は赤色で塗る。
+    // プラス部分は青色、マイナス部分は赤色で塗る。4か月表示。
     const getSixMonthsData = () => {
       const monthNames = [];
       const balancePoints = [];
@@ -612,7 +612,7 @@ createApp({
 
       let runningBalance = getStartingBalanceForOffset(0);
 
-      for (let off = 0; off < 6; off++) {
+      for (let off = 0; off < 4; off++) {
         const ymInfo = getYmByOffset(off);
         const income = dailyCoins.value * ymInfo.days;
 
@@ -701,7 +701,7 @@ createApp({
           data: {
             datasets: [
               {
-                label: '必要コイン残',
+                label: '必要',
                 data: neededPoints,
                 borderColor: '#e11d48',
                 backgroundColor: 'transparent',
@@ -720,7 +720,7 @@ createApp({
                 order: 1
               },
               {
-                label: 'コイン残高推移',
+                label: '残高',
                 data: balancePoints,
                 borderColor: '#0284c7',
                 backgroundColor: function(context) {
@@ -762,10 +762,10 @@ createApp({
             },
             plugins: {
               legend: {
-                position: 'top',
-                align: 'end',
+                position: 'right',
+                align: 'start',
                 labels: {
-                  boxWidth: 10,
+                  boxWidth: 8,
                   boxHeight: 8,
                   usePointStyle: true,
                   pointStyle: 'circle',
@@ -774,7 +774,7 @@ createApp({
                     weight: 'bold',
                     family: '"Noto Sans JP", sans-serif'
                   },
-                  padding: 8
+                  padding: 10
                 }
               },
               tooltip: {
@@ -800,7 +800,7 @@ createApp({
               x: {
                 type: 'linear',
                 min: 0,
-                max: 6,
+                max: 4,
                 grid: {
                   display: false
                 },
