@@ -603,9 +603,8 @@ createApp({
     };
 
     // 直近6か月のコイン残高推移 ＆ 必要コイン残推移データの算出
-    // 要件: 購入は毎月1日に行い、入手は毎日同じ量が入ってくる。
-    // そのため1日にガクッと下がり、月を通して回復していく推移を表現する。
-    // 一時的にマイナスになる場合もそのままマイナスで表示する。
+    // 要件: 各月1日に購入でガクッと垂直(ほぼ90度)に下がり、そこから翌月1日に向かって線形に回復する。
+    // プラス部分は青色、マイナス部分は赤色で塗る。
     const getSixMonthsData = () => {
       const labels = [];
       const balances = [];
@@ -624,10 +623,12 @@ createApp({
 
         const expense = totalPieces * 10;
         
-        // 月初1日の購入直後 (ガクッと下がる)
-        const day1Balance = runningBalance - expense;
-        // 月末 (日々のコイン獲得で回復した最終残高)
-        const endOfMonthBalance = day1Balance + income;
+        // ① 1日・購入直前 (前月末残高を引き継いだ状態)
+        const day1BeforeBalance = runningBalance;
+        // ② 1日・購入直後 (90度ガクッと下がった状態)
+        const day1AfterBalance = runningBalance - expense;
+        // ③ 月末 (1ヶ月かけて回復した状態)
+        const endOfMonthBalance = day1AfterBalance + income;
 
         // その月終了時点での全生徒の「必要コインの残」
         const remainingPieces = students.value.reduce((sum, s) => {
@@ -639,12 +640,17 @@ createApp({
         }, 0);
         const reqCoins = remainingPieces * 10;
 
-        // 1日 (購入直後)
-        labels.push(`${ymInfo.month}月1日`);
-        balances.push(day1Balance);
+        // 1日 (購入前)
+        labels.push(`${ymInfo.month}月`);
+        balances.push(day1BeforeBalance);
         remainingNeeded.push(reqCoins);
 
-        // 月末 (回復後)
+        // 1日 (購入直後: ほぼ垂直に下がる)
+        labels.push(`${ymInfo.month}月 (購入後)`);
+        balances.push(day1AfterBalance);
+        remainingNeeded.push(reqCoins);
+
+        // 月末 (日々のコイン獲得で線形回復)
         labels.push(`${ymInfo.month}月末`);
         balances.push(endOfMonthBalance);
         remainingNeeded.push(reqCoins);
@@ -668,13 +674,31 @@ createApp({
 
         const { labels, balances, remainingNeeded } = getSixMonthsData();
 
-        const ctx = canvas.getContext('2d');
-        // 残高用のグラデーション背景
-        const balanceGradient = ctx.createLinearGradient(0, 0, 0, 200);
-        balanceGradient.addColorStop(0, 'rgba(56, 189, 248, 0.40)');
-        balanceGradient.addColorStop(1, 'rgba(56, 189, 248, 0.02)');
+        // プラスは青色、マイナスは赤色のグラデーション背景
+        const getDualColorGradient = (context) => {
+          const chart = context.chart;
+          const { ctx, chartArea, scales } = chart;
+          if (!chartArea || !scales.y) return null;
 
-        trendChartInstance = new Chart(ctx, {
+          const zeroPixel = scales.y.getPixelForValue(0);
+          const top = chartArea.top;
+          const bottom = chartArea.bottom;
+
+          // ゼロラインの相対位置 (0〜1)
+          const zeroRatio = Math.max(0, Math.min(1, (zeroPixel - top) / (bottom - top)));
+
+          const gradient = ctx.createLinearGradient(0, top, 0, bottom);
+          // 0以上 (プラス): 上部からゼロラインまで薄い青色
+          gradient.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
+          gradient.addColorStop(zeroRatio, 'rgba(56, 189, 248, 0.05)');
+          // 0未満 (マイナス): ゼロラインから底部まで薄い赤色
+          gradient.addColorStop(zeroRatio, 'rgba(244, 63, 94, 0.08)');
+          gradient.addColorStop(1, 'rgba(244, 63, 94, 0.40)');
+
+          return gradient;
+        };
+
+        trendChartInstance = new Chart(canvas, {
           type: 'line',
           data: {
             labels,
@@ -689,25 +713,37 @@ createApp({
                 pointBackgroundColor: '#e11d48',
                 pointBorderColor: '#ffffff',
                 pointBorderWidth: 1.5,
-                pointRadius: 2.5,
+                pointRadius: function(context) {
+                  // 各月の代表点のみ丸を表示してすっきりさせる
+                  const lbl = labels[context.dataIndex] || '';
+                  return lbl.endsWith('月') ? 2.5 : 0;
+                },
                 pointHoverRadius: 4.5,
                 fill: false,
-                tension: 0.1,
+                tension: 0,
                 order: 1
               },
               {
                 label: 'コイン残高推移',
                 data: balances,
                 borderColor: '#0284c7',
-                backgroundColor: balanceGradient,
-                borderWidth: 2.5,
-                pointBackgroundColor: '#0284c7',
+                backgroundColor: function(context) {
+                  return getDualColorGradient(context);
+                },
+                borderWidth: 2.2,
+                pointBackgroundColor: function(context) {
+                  const val = context.parsed ? context.parsed.y : balances[context.dataIndex];
+                  return val < 0 ? '#f43f5e' : '#0284c7';
+                },
                 pointBorderColor: '#ffffff',
                 pointBorderWidth: 1.5,
-                pointRadius: 3,
+                pointRadius: function(context) {
+                  const lbl = labels[context.dataIndex] || '';
+                  return lbl.includes('購入後') || lbl.endsWith('月') ? 2.5 : 0;
+                },
                 pointHoverRadius: 5,
                 fill: true,
-                tension: 0.1,
+                tension: 0, // 直線でカクッと垂直落下＆線形回復
                 order: 2
               }
             ]
@@ -751,6 +787,11 @@ createApp({
                 padding: 8,
                 cornerRadius: 8,
                 callbacks: {
+                  title: function(items) {
+                    if (!items.length) return '';
+                    const idx = items[0].dataIndex;
+                    return labels[idx] || '';
+                  },
                   label: function(context) {
                     return ` ${context.dataset.label}: ${context.parsed.y.toLocaleString()} コイン`;
                   }
@@ -769,15 +810,24 @@ createApp({
                   },
                   color: '#64748b',
                   callback: function(val, index) {
-                    // 表示が密になりすぎないよう各月の主要ラベルを表示
+                    // 各月の先頭（"〇月"）のみラベル表示して重複・文字潰れを解消
                     const lbl = labels[index] || '';
-                    return lbl.includes('1日') ? lbl.replace('1日', '月') : '';
+                    if (/^\d+月$/.test(lbl)) {
+                      return lbl;
+                    }
+                    return '';
                   }
                 }
               },
               y: {
                 grid: {
-                  color: '#f1f5f9'
+                  color: function(context) {
+                    // 0コインの基準線を少し濃くしてプラス/マイナスの境目を強調
+                    return context.tick.value === 0 ? '#cbd5e1' : '#f1f5f9';
+                  },
+                  lineWidth: function(context) {
+                    return context.tick.value === 0 ? 1.5 : 1;
+                  }
                 },
                 ticks: {
                   font: {
