@@ -1030,27 +1030,32 @@ createApp({
           remaining = Math.max(0, remaining - currentBuy);
         }
 
-        // fromMonthOffset から順に各月に「5の倍数（最大80）」で割り振る
-        // 要件: 文字は5文字単位でしか購入できないため、必ず5の倍数になるようにする
-        let off = fromMonthOffset;
-        while (remaining >= 5 && off < 60) {
-          const ymInfo = getYmByOffset(off);
-          // 5文字単位で最大80まで
-          const buyUnits = Math.min(16, Math.floor(remaining / 5));
-          const buy = buyUnits * 5;
-          if (buy <= 0) break;
-          newPlans[ymInfo.key] = buy;
-          remaining -= buy;
-          off++;
-        }
-
         student.buyPlans = newPlans;
       });
 
-      // 【要件追加】：月末残高マイナス防止調整
-      // 月の間に一時的にマイナスになっても月内に回復すればOK。
-      // ただし月末の最終日時点で残高がマイナスになる場合は購入できないため、
-      // ピン留めされていない購入予定の生徒の中で最下段から順番に5文字ずつ減らしてマイナスにならないよう調整する。
+      // 【要件】：各月順に、月末残高がマイナスにならない範囲内で優先度順に5文字単位で購入を配分する
+      // 優先順位: 画面の生徒リスト順（ピン留め生徒が最優先、次いで上段の生徒から優先）
+      const sortedStudents = [...filteredStudents.value].filter(s => !s.isUnreleased && s.isEdited);
+      // さらに filteredStudents に含まれていない編集済み生徒がいれば末尾に追加
+      students.value.forEach(s => {
+        if (!s.isUnreleased && s.isEdited && !sortedStudents.some(item => item.id === s.id)) {
+          sortedStudents.push(s);
+        }
+      });
+
+      // 生徒ごとの残り必要文字数を追跡
+      const remainingMap = new Map();
+      sortedStudents.forEach(s => {
+        const totalNeeded = getRawRequiredPieces(s);
+        let boughtSoFar = 0;
+        if (s.buyPlans) {
+          Object.keys(s.buyPlans).forEach(k => {
+            boughtSoFar += (s.buyPlans[k] || 0);
+          });
+        }
+        remainingMap.set(s.id, Math.max(0, totalNeeded - boughtSoFar));
+      });
+
       const startOff = fromMonthOffset;
       const maxOff = 60; // 最大シミュレーション月数
       let runningBal = getStartingBalanceForOffset(startOff);
@@ -1060,51 +1065,33 @@ createApp({
         const ym = ymInfo.key;
         const income = dailyCoins.value * ymInfo.days;
 
-        // まず現在のその月の消費額を計算
-        const getMonthlyExpense = () => {
-          let sumPieces = 0;
-          students.value.forEach(s => {
-            if (!s.isUnreleased && s.isEdited) {
-              sumPieces += (s.buyPlans?.[ym] || 0);
-            }
-          });
-          return sumPieces * 10;
-        };
+        // 月初残高 + 当月入手可能コイン = その月内で使える最大コイン数
+        // ※月末残高が 0 以上であるための条件: 当月消費 <= 月初残高 + 当月入手
+        let availableBudget = runningBal + income;
+        let monthExpense = 0;
 
-        // 月末時点の残高: 月初残高 - 当月消費 + 当月入手
-        let endOfMonthBalance = runningBal - getMonthlyExpense() + income;
+        // 優先度順（ピン留め最優先、上段優先）に各生徒へ最大80文字（5文字単位）ずつ割り振る
+        for (const student of sortedStudents) {
+          let rem = remainingMap.get(student.id) || 0;
+          if (rem < 5) continue;
 
-        // 月末残高がマイナスの場合、ピン留めされていない生徒の中で最下段から5文字ずつ減算
-        if (endOfMonthBalance < 0) {
-          // 画面の並び順（filteredStudents）に基づいて下段から走査
-          // ピン留めされていない生徒を抽出
-          const candidates = [...filteredStudents.value].filter(s => !s.isPinned && !s.isUnreleased && s.isEdited);
+          // この生徒に購入できる最大文字数（上限80、残り必要数、予算の範囲内）
+          const maxByCap = 80;
+          const maxByNeed = Math.floor(rem / 5) * 5;
+          const maxByBudget = Math.floor(Math.max(0, availableBudget) / 50) * 5;
 
-          let loopLimit = 1000; // 無限ループ防止
-          while (endOfMonthBalance < 0 && loopLimit > 0) {
-            loopLimit--;
-            let reduced = false;
-
-            // 下段（末尾）から順に探す
-            for (let i = candidates.length - 1; i >= 0; i--) {
-              const cand = candidates[i];
-              const curBuy = cand.buyPlans?.[ym] || 0;
-              if (curBuy > 0) {
-                const deduct = Math.min(5, curBuy);
-                cand.buyPlans[ym] = curBuy - deduct;
-                endOfMonthBalance += (deduct * 10);
-                reduced = true;
-                if (endOfMonthBalance >= 0) break;
-              }
-            }
-
-            // これ以上減らせる生徒がいない場合は終了
-            if (!reduced) break;
+          const toBuy = Math.min(maxByCap, maxByNeed, maxByBudget);
+          if (toBuy > 0) {
+            student.buyPlans[ym] = toBuy;
+            remainingMap.set(student.id, rem - toBuy);
+            const cost = toBuy * 10;
+            availableBudget -= cost;
+            monthExpense += cost;
           }
         }
 
-        // 次の月の月初残高を更新
-        runningBal = runningBal - getMonthlyExpense() + income;
+        // 次の月の月初残高（＝当月の月末残高）
+        runningBal = runningBal - monthExpense + income;
       }
 
       closeBatchMenu();
