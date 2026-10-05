@@ -676,14 +676,26 @@ createApp({
         const getDualColorGradient = (context) => {
           const chart = context.chart;
           const { ctx, chartArea, scales } = chart;
-          if (!chartArea || !scales.y) return null;
+          if (!chartArea || !scales || !scales.y) {
+            return 'rgba(56, 189, 248, 0.2)';
+          }
 
-          const zeroPixel = scales.y.getPixelForValue(0);
           const top = chartArea.top;
           const bottom = chartArea.bottom;
+          const height = bottom - top;
+          if (!height || height <= 0) {
+            return 'rgba(56, 189, 248, 0.2)';
+          }
 
-          // ゼロラインの相対位置 (0〜1)
-          const zeroRatio = Math.max(0, Math.min(1, (zeroPixel - top) / (bottom - top)));
+          let zeroRatio = 0.5;
+          try {
+            const zeroPixel = scales.y.getPixelForValue(0);
+            if (!isNaN(zeroPixel)) {
+              zeroRatio = Math.max(0, Math.min(1, (zeroPixel - top) / height));
+            }
+          } catch (e) {
+            zeroRatio = 0.5;
+          }
 
           const gradient = ctx.createLinearGradient(0, top, 0, bottom);
           // 0以上 (プラス): 上部からゼロラインまで薄い青色
@@ -821,26 +833,21 @@ createApp({
               },
               y: {
                 suggestedMin: 0,
-                suggestedMax: 0,
                 grid: {
                   color: function(context) {
-                    // 0コインの基準線を黒の太線にして一目で0だと分かるように強調
-                    return context.tick.value === 0 ? '#1e293b' : '#f1f5f9';
+                    return context.tick && context.tick.value === 0 ? '#1e293b' : '#f1f5f9';
                   },
                   lineWidth: function(context) {
-                    return context.tick.value === 0 ? 2 : 1;
-                  },
-                  z: 10 // グリッド線が背景グラデーションより手前に描画されるように設定
+                    return context.tick && context.tick.value === 0 ? 2.5 : 1;
+                  }
                 },
                 ticks: {
-                  font: function(context) {
-                    return {
-                      size: 10,
-                      weight: context.tick.value === 0 ? '900' : '600'
-                    };
+                  font: {
+                    size: 10,
+                    weight: '600'
                   },
                   color: function(context) {
-                    return context.tick.value === 0 ? '#0f172a' : '#94a3b8';
+                    return context.tick && context.tick.value === 0 ? '#0f172a' : '#94a3b8';
                   },
                   callback: function(value) {
                     return value.toLocaleString();
