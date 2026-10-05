@@ -603,6 +603,9 @@ createApp({
     };
 
     // 直近6か月のコイン残高推移 ＆ 必要コイン残推移データの算出
+    // 要件: 購入は毎月1日に行い、入手は毎日同じ量が入ってくる。
+    // そのため1日にガクッと下がり、月を通して回復していく推移を表現する。
+    // 一時的にマイナスになる場合もそのままマイナスで表示する。
     const getSixMonthsData = () => {
       const labels = [];
       const balances = [];
@@ -620,7 +623,11 @@ createApp({
         }, 0);
 
         const expense = totalPieces * 10;
-        runningBalance += (income - expense);
+        
+        // 月初1日の購入直後 (ガクッと下がる)
+        const day1Balance = runningBalance - expense;
+        // 月末 (日々のコイン獲得で回復した最終残高)
+        const endOfMonthBalance = day1Balance + income;
 
         // その月終了時点での全生徒の「必要コインの残」
         const remainingPieces = students.value.reduce((sum, s) => {
@@ -630,10 +637,19 @@ createApp({
           const bought = getCumulativeBuyUpToYm(s, ymInfo.key);
           return sum + Math.max(0, needed - bought);
         }, 0);
+        const reqCoins = remainingPieces * 10;
 
-        labels.push(`${ymInfo.month}月`);
-        balances.push(runningBalance);
-        remainingNeeded.push(remainingPieces * 10);
+        // 1日 (購入直後)
+        labels.push(`${ymInfo.month}月1日`);
+        balances.push(day1Balance);
+        remainingNeeded.push(reqCoins);
+
+        // 月末 (回復後)
+        labels.push(`${ymInfo.month}月末`);
+        balances.push(endOfMonthBalance);
+        remainingNeeded.push(reqCoins);
+
+        runningBalance = endOfMonthBalance;
       }
 
       return { labels, balances, remainingNeeded };
@@ -655,7 +671,7 @@ createApp({
         const ctx = canvas.getContext('2d');
         // 残高用のグラデーション背景
         const balanceGradient = ctx.createLinearGradient(0, 0, 0, 200);
-        balanceGradient.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
+        balanceGradient.addColorStop(0, 'rgba(56, 189, 248, 0.40)');
         balanceGradient.addColorStop(1, 'rgba(56, 189, 248, 0.02)');
 
         trendChartInstance = new Chart(ctx, {
@@ -668,15 +684,15 @@ createApp({
                 data: remainingNeeded,
                 borderColor: '#e11d48',
                 backgroundColor: 'transparent',
-                borderWidth: 2.5,
-                borderDash: [5, 4],
+                borderWidth: 2,
+                borderDash: [4, 4],
                 pointBackgroundColor: '#e11d48',
                 pointBorderColor: '#ffffff',
-                pointBorderWidth: 2,
-                pointRadius: 3.5,
-                pointHoverRadius: 5,
+                pointBorderWidth: 1.5,
+                pointRadius: 2.5,
+                pointHoverRadius: 4.5,
                 fill: false,
-                tension: 0.3,
+                tension: 0.1,
                 order: 1
               },
               {
@@ -687,11 +703,11 @@ createApp({
                 borderWidth: 2.5,
                 pointBackgroundColor: '#0284c7',
                 pointBorderColor: '#ffffff',
-                pointBorderWidth: 2,
-                pointRadius: 3.5,
+                pointBorderWidth: 1.5,
+                pointRadius: 3,
                 pointHoverRadius: 5,
                 fill: true,
-                tension: 0.3,
+                tension: 0.1,
                 order: 2
               }
             ]
@@ -748,14 +764,18 @@ createApp({
                 },
                 ticks: {
                   font: {
-                    size: 11,
+                    size: 10,
                     weight: 'bold'
                   },
-                  color: '#64748b'
+                  color: '#64748b',
+                  callback: function(val, index) {
+                    // 表示が密になりすぎないよう各月の主要ラベルを表示
+                    const lbl = labels[index] || '';
+                    return lbl.includes('1日') ? lbl.replace('1日', '月') : '';
+                  }
                 }
               },
               y: {
-                beginAtZero: true,
                 grid: {
                   color: '#f1f5f9'
                 },
@@ -947,6 +967,66 @@ createApp({
 
         student.buyPlans = newPlans;
       });
+
+      // 【要件追加】：月末残高マイナス防止調整
+      // 月の間に一時的にマイナスになっても月内に回復すればOK。
+      // ただし月末の最終日時点で残高がマイナスになる場合は購入できないため、
+      // ピン留めされていない購入予定の生徒の中で最下段から順番に5文字ずつ減らしてマイナスにならないよう調整する。
+      const startOff = fromMonthOffset;
+      const maxOff = 60; // 最大シミュレーション月数
+      let runningBal = getStartingBalanceForOffset(startOff);
+
+      for (let off = startOff; off < maxOff; off++) {
+        const ymInfo = getYmByOffset(off);
+        const ym = ymInfo.key;
+        const income = dailyCoins.value * ymInfo.days;
+
+        // まず現在のその月の消費額を計算
+        const getMonthlyExpense = () => {
+          let sumPieces = 0;
+          students.value.forEach(s => {
+            if (!s.isUnreleased && s.isEdited) {
+              sumPieces += (s.buyPlans?.[ym] || 0);
+            }
+          });
+          return sumPieces * 10;
+        };
+
+        // 月末時点の残高: 月初残高 - 当月消費 + 当月入手
+        let endOfMonthBalance = runningBal - getMonthlyExpense() + income;
+
+        // 月末残高がマイナスの場合、ピン留めされていない生徒の中で最下段から5文字ずつ減算
+        if (endOfMonthBalance < 0) {
+          // 画面の並び順（filteredStudents）に基づいて下段から走査
+          // ピン留めされていない生徒を抽出
+          const candidates = [...filteredStudents.value].filter(s => !s.isPinned && !s.isUnreleased && s.isEdited);
+
+          let loopLimit = 1000; // 無限ループ防止
+          while (endOfMonthBalance < 0 && loopLimit > 0) {
+            loopLimit--;
+            let reduced = false;
+
+            // 下段（末尾）から順に探す
+            for (let i = candidates.length - 1; i >= 0; i--) {
+              const cand = candidates[i];
+              const curBuy = cand.buyPlans?.[ym] || 0;
+              if (curBuy > 0) {
+                const deduct = Math.min(5, curBuy);
+                cand.buyPlans[ym] = curBuy - deduct;
+                endOfMonthBalance += (deduct * 10);
+                reduced = true;
+                if (endOfMonthBalance >= 0) break;
+              }
+            }
+
+            // これ以上減らせる生徒がいない場合は終了
+            if (!reduced) break;
+          }
+        }
+
+        // 次の月の月初残高を更新
+        runningBal = runningBal - getMonthlyExpense() + income;
+      }
 
       closeBatchMenu();
     };
