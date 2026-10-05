@@ -392,7 +392,9 @@ createApp({
 
       const currentBuy = student.buyPlans?.[currentYm] || 0;
       if (currentBuy >= 80) return false;
-      if (currentBuy >= remBefore) return false;
+      // 5文字単位での購入のため、端数（例: 残り4文字）がある場合でも達成（切り上げ）まで購入可能
+      const neededInUnits = Math.ceil(remBefore / 5) * 5;
+      if (currentBuy >= neededInUnits) return false;
 
       return true;
     };
@@ -1073,17 +1075,18 @@ createApp({
         // 優先度順（ピン留め最優先、上段優先）に各生徒へ最大80文字（5文字単位）ずつ割り振る
         for (const student of sortedStudents) {
           let rem = remainingMap.get(student.id) || 0;
-          if (rem < 5) continue;
+          if (rem <= 0) continue;
 
-          // この生徒に購入できる最大文字数（上限80、残り必要数、予算の範囲内）
+          // この生徒に購入できる最大文字数（上限80、残り目標達成に必要な5文字単位、予算の範囲内）
+          // 要件: 残りが5の倍数でない場合（例: 残り4）でも目標を達成するところまで（切り上げの5文字単位で）購入する
           const maxByCap = 80;
-          const maxByNeed = Math.floor(rem / 5) * 5;
+          const maxByNeed = Math.min(80, Math.ceil(rem / 5) * 5);
           const maxByBudget = Math.floor(Math.max(0, availableBudget) / 50) * 5;
 
           const toBuy = Math.min(maxByCap, maxByNeed, maxByBudget);
           if (toBuy > 0) {
             student.buyPlans[ym] = toBuy;
-            remainingMap.set(student.id, rem - toBuy);
+            remainingMap.set(student.id, Math.max(0, rem - toBuy));
             const cost = toBuy * 10;
             availableBudget -= cost;
             monthExpense += cost;
