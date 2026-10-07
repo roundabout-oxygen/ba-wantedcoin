@@ -5,6 +5,9 @@
 🔗 **Webアプリを開く**  
 👉 **https://roundabout-oxygen.github.io/ba-wantedcoin/**
 
+🔗 **紹介記事Note**  
+👉 **https://note.com/glad_lilac3872/n/n4509010c64a7**
+
 ---
 
 ### ■ PC版画面
