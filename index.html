@@ -199,7 +199,8 @@
         <div>
           <h1 class="text-sm sm:text-lg font-black text-slate-800 tracking-tight flex items-center gap-1.5">
             指名手配ショップ購入計画アプリ
-            <span class="text-[9px] sm:text-[10px] bg-sky-100 text-sky-700 font-bold px-1.5 py-0.5 rounded-full border border-sky-200">2026年10月〜</span>
+            <span class="text-[9px] sm:text-[10px] bg-sky-100 text-sky-700 font-bold px-1.5 py-0.5 rounded-full border border-sky-200">{{ baseYear }}年{{ baseMonth }}月〜</span>
+            <span class="text-[9px] sm:text-[10px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded-full border border-slate-200">{{ appVersion }}</span>
           </h1>
         </div>
       </div>
@@ -1268,7 +1269,7 @@
 
     <!-- フッター -->
     <footer class="mt-6 text-center text-xs text-slate-400">
-      <p class="text-[11px] text-slate-400">ブルーアーカイブ（ブルアカ）指名手配ショップ購入計画アプリ</p>
+      <p class="text-[11px] text-slate-400">ブルーアーカイブ（ブルアカ）指名手配ショップ購入計画アプリ {{ appVersion }}</p>
     </footer>
 
   </div>

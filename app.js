@@ -1,12 +1,27 @@
 const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
 
+const APP_VERSION = 'v1.0.2';
+
 createApp({
   setup() {
     const STORAGE_KEY = 'ba_wanted_shop_plan_v9';
+    const appVersion = ref(APP_VERSION);
 
-    // 基準年月 (アプリ内の「今月」設定。初期値: 2026年10月)
-    const baseYear = ref(2026);
-    const baseMonth = ref(10);
+    // 端末の現在日時取得ヘルパー
+    const getRealToday = () => {
+      const now = new Date();
+      return {
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+        day: now.getDate()
+      };
+    };
+
+    const initialToday = getRealToday();
+
+    // 基準年月 (アプリ内の「今月」設定。初期値: 現在の年月)
+    const baseYear = ref(initialToday.year);
+    const baseMonth = ref(initialToday.month);
 
     const currentYear = computed(() => baseYear.value);
     const currentMonth = computed(() => baseMonth.value);
@@ -20,7 +35,7 @@ createApp({
     const hasMonthlyHalf = ref(false);  // マンスリー（ハーフ） (+3枚/日)
     const hideUnreleased = ref(true);   // 未追加生徒を非表示 (初期チェックON)
 
-    // 開始日付 (月・日): 初回起動時はその月の1日 (10/1)
+    // 開始日付 (月・日): 初回起動時はその月の1日
     const startMonth = ref(baseMonth.value);
     const startDay = ref(1);
 
@@ -132,6 +147,41 @@ createApp({
     const toYmKey = (year, month) => {
       return `${year}-${String(month).padStart(2, '0')}`;
     };
+
+    // 現在の基準月より前（過去月）の購入データを削除するヘルパー
+    // ※現在の星・所持文字数は「当月時点」の入力値であるため、前月以前の購入計画が残っていると二重計上になるのを防ぐ
+    const prunePastBuyPlans = () => {
+      const currentKey = toYmKey(baseYear.value, baseMonth.value);
+      let hadPastActivePlans = false;
+      students.value.forEach(s => {
+        if (s.buyPlans) {
+          Object.keys(s.buyPlans).forEach(k => {
+            if (k < currentKey) {
+              if ((s.buyPlans[k] || 0) > 0) {
+                hadPastActivePlans = true;
+              }
+              delete s.buyPlans[k];
+            }
+          });
+        }
+      });
+      return hadPastActivePlans;
+    };
+
+    // startMonthが変更された際、baseMonthも同期し、過去月データを整理
+    watch(startMonth, (newMonth, oldMonth) => {
+      if (!newMonth) return;
+      if (newMonth !== baseMonth.value) {
+        if (oldMonth === 12 && newMonth === 1) {
+          baseYear.value += 1;
+        } else if (oldMonth === 1 && newMonth === 12) {
+          baseYear.value -= 1;
+        }
+        baseMonth.value = newMonth;
+        displayMonthOffset.value = 0;
+        prunePastBuyPlans();
+      }
+    });
 
     // オフセット付き年月取得ヘルパー (今月の場合は日割り日数を反映)
     const getYmByOffset = (offset) => {
@@ -308,24 +358,26 @@ createApp({
       return student.currentGrade >= 7;
     };
 
-    // 指定月(targetYm)までの全購入累計文字数を取得 (過去月すべてを含む)
+    // 当月(currentKey)から指定月(targetYm)までの購入累計文字数を取得 (前月以前の過去データは含めない)
     const getCumulativeBuyUpToYm = (student, targetYm) => {
       if (!student.buyPlans) return 0;
+      const currentKey = toYmKey(baseYear.value, baseMonth.value);
       let sum = 0;
       Object.keys(student.buyPlans).forEach(k => {
-        if (k <= targetYm) {
+        if (k >= currentKey && k <= targetYm) {
           sum += (student.buyPlans[k] || 0);
         }
       });
       return sum;
     };
 
-    // 指定月(targetYm)より前(未満)の全購入累計文字数を取得
+    // 当月(currentKey)から指定月(targetYm)より前(未満)までの購入累計文字数を取得
     const getCumulativeBuyBeforeYm = (student, targetYm) => {
       if (!student.buyPlans) return 0;
+      const currentKey = toYmKey(baseYear.value, baseMonth.value);
       let sum = 0;
       Object.keys(student.buyPlans).forEach(k => {
-        if (k < targetYm) {
+        if (k >= currentKey && k < targetYm) {
           sum += (student.buyPlans[k] || 0);
         }
       });
@@ -463,16 +515,24 @@ createApp({
         student.extraPieces = 0;
       }
 
+      const currentKey = toYmKey(baseYear.value, baseMonth.value);
       const targetCum = gradeDefs[student.targetGrade]?.cumPieces || 0;
       const currentCum = gradeDefs[student.currentGrade]?.cumPieces || 0;
       const neededBase = Math.max(0, targetCum - currentCum - (student.currentPieces || 0));
       const maxAllowedBuy = Math.max(0, neededBase - student.extraPieces);
 
-      const currentTotalBuy = Object.values(student.buyPlans || {}).reduce((sum, v) => sum + (v || 0), 0);
+      const currentTotalBuy = Object.entries(student.buyPlans || {})
+        .filter(([k]) => k >= currentKey)
+        .reduce((sum, [, v]) => sum + (v || 0), 0);
 
       if (currentTotalBuy > maxAllowedBuy) {
         let toReduce = currentTotalBuy - maxAllowedBuy;
-        const newPlans = { ...(student.buyPlans || {}) };
+        const newPlans = {};
+        Object.keys(student.buyPlans || {}).forEach(k => {
+          if (k >= currentKey) {
+            newPlans[k] = student.buyPlans[k];
+          }
+        });
         const sortedKeys = Object.keys(newPlans)
           .filter(k => (newPlans[k] || 0) > 0)
           .sort()
@@ -589,8 +649,8 @@ createApp({
       const rawNeeded = getRawRequiredPieces(student);
       if (rawNeeded <= 0) return '達成済';
 
-      // 過去月〜未来月(最大48ヶ月先まで)を走査
-      const startOff = Math.min(0, oldestOffset.value);
+      // 当月〜未来月(最大48ヶ月先まで)を走査
+      const startOff = 0;
       const endOff = Math.max(24, furthestOffset.value + 6);
 
       for (let off = startOff; off <= endOff; off++) {
@@ -1001,35 +1061,25 @@ createApp({
       const currentKey = toYmKey(baseYear.value, baseMonth.value);
 
       students.value.forEach(student => {
-        // 未追加生徒・未編集生徒は除外
-        if (student.isUnreleased || !student.isEdited) return;
-
-        const totalNeeded = getRawRequiredPieces(student);
-        if (totalNeeded <= 0) return;
-
-        const newPlans = {};
-        // 過去月の購入データを保持
-        if (student.buyPlans) {
-          Object.keys(student.buyPlans).forEach(k => {
-            if (k < currentKey) {
-              newPlans[k] = student.buyPlans[k];
-            }
-          });
+        // 未追加生徒・未編集生徒は過去データのみ整理して除外
+        if (student.isUnreleased || !student.isEdited) {
+          student.buyPlans = {};
+          return;
         }
 
-        // 過去月購入累計
-        let pastBought = 0;
-        Object.keys(newPlans).forEach(k => {
-          pastBought += (newPlans[k] || 0);
-        });
+        const totalNeeded = getRawRequiredPieces(student);
+        if (totalNeeded <= 0) {
+          student.buyPlans = {};
+          return;
+        }
 
-        let remaining = Math.max(0, totalNeeded - pastBought);
-
+        const newPlans = {};
         if (fromMonthOffset === 1) {
           // 翌月からmax購入: 今月(offset=0)の購入数は維持
           const currentBuy = student.buyPlans?.[currentKey] || 0;
-          newPlans[currentKey] = currentBuy;
-          remaining = Math.max(0, remaining - currentBuy);
+          if (currentBuy > 0) {
+            newPlans[currentKey] = currentBuy;
+          }
         }
 
         student.buyPlans = newPlans;
@@ -1045,14 +1095,16 @@ createApp({
         }
       });
 
-      // 生徒ごとの残り必要文字数を追跡
+      // 生徒ごとの残り必要文字数を追跡 (当月以降の既存購入分のみ差し引く)
       const remainingMap = new Map();
       sortedStudents.forEach(s => {
         const totalNeeded = getRawRequiredPieces(s);
         let boughtSoFar = 0;
         if (s.buyPlans) {
           Object.keys(s.buyPlans).forEach(k => {
-            boughtSoFar += (s.buyPlans[k] || 0);
+            if (k >= currentKey) {
+              boughtSoFar += (s.buyPlans[k] || 0);
+            }
           });
         }
         remainingMap.set(s.id, Math.max(0, totalNeeded - boughtSoFar));
@@ -1128,6 +1180,9 @@ createApp({
     const confirmReset = () => {
       if (confirm('すべての入力（所持コイン、星上げ目標、購入計画、ピン留め）を初期化しますか？')) {
         localStorage.removeItem(STORAGE_KEY);
+        const real = getRealToday();
+        baseYear.value = real.year;
+        baseMonth.value = real.month;
         currentCoins.value = 1800;
         hasMonthly.value = false;
         hasMonthlyHalf.value = false;
@@ -1144,16 +1199,6 @@ createApp({
         students.value = rawMaster.map(initStudent);
       }
       closeBatchMenu();
-    };
-
-    // 端末の現在日時取得ヘルパー
-    const getRealToday = () => {
-      const now = new Date();
-      return {
-        year: now.getFullYear(),
-        month: now.getMonth() + 1,
-        day: now.getDate()
-      };
     };
 
     // 自動ランクアップ（星上げ）計算ヘルパー
@@ -1296,13 +1341,14 @@ createApp({
         }
       });
 
-      // 所持コイン・年月設定の更新 (buyPlansはキーがYYYY-MMなので新月に連動して自然にスライド)
+      // 所持コイン・年月設定の更新 (前月以前の購入計画はすでに星・文字数へ反映済みのため削除し、新月以降の予定のみ残す)
       currentCoins.value = prev.carriedCoins;
       baseYear.value = prev.toYear;
       baseMonth.value = prev.toMonth;
       startMonth.value = prev.toMonth;
       startDay.value = Math.min(new Date(prev.toYear, prev.toMonth, 0).getDate(), prev.realDate.day || 1);
       displayMonthOffset.value = 0;
+      prunePastBuyPlans();
 
       isRolloverModalOpen.value = false;
       saveState();
@@ -1357,7 +1403,10 @@ createApp({
           if (imported.currentCoins !== undefined) currentCoins.value = imported.currentCoins;
           if (imported.hasMonthly !== undefined) hasMonthly.value = imported.hasMonthly;
           if (imported.hasMonthlyHalf !== undefined) hasMonthlyHalf.value = imported.hasMonthlyHalf;
-          if (imported.startMonth !== undefined) startMonth.value = imported.startMonth;
+          if (imported.startMonth !== undefined) {
+            startMonth.value = imported.startMonth;
+            baseMonth.value = imported.startMonth;
+          }
           if (imported.startDay !== undefined) startDay.value = imported.startDay;
 
           if (Array.isArray(imported.students)) {
@@ -1373,6 +1422,10 @@ createApp({
                 if (imp.isEdited !== undefined) target.isEdited = imp.isEdited;
               }
             });
+          }
+          const hadPastActivePlans = prunePastBuyPlans();
+          if (hadPastActivePlans) {
+            applyMaxBuy(0);
           }
           alert('設定データを正常に読み込みました！');
         } catch (err) {
@@ -1434,7 +1487,12 @@ createApp({
         if (parsed.hasMonthly !== undefined) hasMonthly.value = parsed.hasMonthly;
         if (parsed.hasMonthlyHalf !== undefined) hasMonthlyHalf.value = parsed.hasMonthlyHalf;
         if (parsed.hideUnreleased !== undefined) hideUnreleased.value = parsed.hideUnreleased;
-        if (parsed.startMonth !== undefined) startMonth.value = parsed.startMonth;
+        if (parsed.startMonth !== undefined) {
+          startMonth.value = parsed.startMonth;
+          if (parsed.startMonth !== baseMonth.value) {
+            baseMonth.value = parsed.startMonth;
+          }
+        }
         if (parsed.startDay !== undefined) startDay.value = parsed.startDay;
         if (parsed.sortKey) sortKey.value = parsed.sortKey;
         if (parsed.filterRole) filterRole.value = parsed.filterRole;
@@ -1482,6 +1540,14 @@ createApp({
             }
           });
         }
+
+        // 過去月（前月以前）の購入計画データが残っていれば削除して二重計上を防ぐ
+        const hadPastActivePlans = prunePastBuyPlans();
+        if (hadPastActivePlans) {
+          // 旧バージョンで繰越後に前月(10月等)の購入データが残存していた場合、当月(11月等)から再計算して保存
+          applyMaxBuy(0);
+          saveState();
+        }
       } catch (e) {
         console.error('Failed to load state from localStorage', e);
       }
@@ -1500,6 +1566,7 @@ createApp({
     );
 
     return {
+      appVersion,
       baseYear,
       baseMonth,
       currentCoins,
